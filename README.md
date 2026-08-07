@@ -1,89 +1,68 @@
 # StreamHarvest
 
-StreamHarvest is a fast, lightweight video downloader for Node.js that supports most popular streaming and video-hosting sites. Grab videos in your preferred format and resolution, right from the command line.
+StreamHarvest is a fast, easy-to-use desktop app for downloading videos from most popular streaming and video-hosting sites. Built with Electron, it offers a simple graphical interface — just paste a link, choose your quality, and download.
 
 ## Features
 
 - 🎥 Supports most major video/streaming platforms
+- 🖥️ Clean, cross-platform desktop GUI (Windows, macOS, Linux)
 - ⚡ Fast, concurrent downloads
 - 📁 Choose format & quality (MP4, best audio-only, etc.)
-- 🔧 Simple, dependency-light CLI
+- 📋 Paste-and-go: just drop in a URL
+- 📃 Batch downloads via a queue
 - 🧩 Extensible — add support for new sites via plugins/extractors
 
-## Requirements
+## Screenshots
 
-- Node.js 18+
-- npm (or yarn/pnpm)
+*(Add a screenshot or GIF of the app here once available)*
 
 ## Installation
 
-Global install (recommended for CLI use):
+### Download prebuilt release
 
-```bash
-npm install -g streamharvest
-```
+Download the latest installer for your platform from the [Releases](../../releases) page:
 
-Or run without installing:
+- **Windows**: `StreamHarvest-Setup-x.x.x.exe`
+- **macOS**: `StreamHarvest-x.x.x.dmg`
+- **Linux**: `StreamHarvest-x.x.x.AppImage`
 
-```bash
-npx streamharvest <url>
-```
-
-Or clone and run locally for development:
+### Build from source
 
 ```bash
 git clone https://github.com/<your-username>/streamharvest.git
 cd streamharvest
 npm install
-npm link
+npm start
 ```
 
 ## Usage
 
-Basic download:
+1. Open StreamHarvest.
+2. Paste a video URL into the input field.
+3. Choose your desired quality/format from the dropdown.
+4. Click **Download**.
+5. Find your file in the configured downloads folder (default: `~/Downloads/StreamHarvest`).
+
+### Batch downloads
+
+Paste multiple URLs (one per line) or import a `.txt` file of links to queue several downloads at once.
+
+### Settings
+
+Available in the app's Settings panel:
+- Default download location
+- Preferred quality/format
+- Concurrent download limit
+- Audio-only mode
+
+## Building & Packaging
+
+StreamHarvest uses [electron-builder](https://www.electron.build/) for packaging.
 
 ```bash
-streamharvest <video-url>
+npm run build       # build the app
+npm run package     # create platform installers
 ```
-
-Choose quality:
-
-```bash
-streamharvest <video-url> --quality 1080p
-```
-
-Audio only:
-
-```bash
-streamharvest <video-url> --audio-only
-```
-
-Specify output directory/filename:
-
-```bash
-streamharvest <video-url> -o ./downloads/%(title)s.%(ext)s
-```
-
-Download a batch from a list of URLs:
-
-```bash
-streamharvest --batch urls.txt
-```
-
-### CLI options
-
-| Flag | Description |
-|------|-------------|
-| `-o, --output <path>` | Output path/filename template |
-| `-q, --quality <res>` | Preferred video quality (e.g. `720p`, `1080p`, `best`) |
-| `--audio-only` | Extract audio only |
-| `--batch <file>` | Download multiple URLs from a text file |
-| `-h, --help` | Show help |
-| `-v, --version` | Show version |
-
-## Configuration
-
-StreamHarvest can be configured via a `.streamharvestrc` file or environment variables for defaults like output directory, preferred format, and concurrency limits. See [Configuration](#) for details.
 
 ## Supported Sites
 
