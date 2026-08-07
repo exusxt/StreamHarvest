@@ -52,8 +52,3 @@ Goal: capture advanced users without scaring off casual ones.
 - Theming isn't real design work at this point — the 14 themes are already done and ready to use, so applying them is just an implementation task like any other UI work in Phase 1.
 - Clipboard monitoring and tray mode (Phase 2) are Electron-specific APIs — good candidates to prototype early since they touch OS-level permissions that can be finicky per platform.
 - "Advanced mode" (raw arg passthrough) is saved for last — low effort but best kept away from power users until the core experience is solid.
-
-## Open decisions
-
-- Will all 14 themes ship at launch, or will some be staggered as later theme-pack updates?
-- Do themes only restyle colors, or do any also change layout/density (compact vs comfortable view)? This affects how deep the theming system needs to go.
