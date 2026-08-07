@@ -1,20 +1,23 @@
 # StreamHarvest
 
-StreamHarvest is a fast, easy-to-use desktop app for downloading videos from most popular streaming and video-hosting sites. Built with Electron, it offers a simple graphical interface — just paste a link, choose your quality, and download.
+StreamHarvest is a fast, easy-to-use desktop app for downloading videos from most popular streaming and video-hosting sites. Built with Electron and powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood, it offers a simple graphical interface — just paste a link, choose your quality, and download.
 
 ## Features
 
-- 🎥 Supports most major video/streaming platforms
+- 🎥 Supports most major video/streaming platforms (via yt-dlp)
 - 🖥️ Clean, cross-platform desktop GUI (Windows, macOS, Linux)
 - ⚡ Fast, concurrent downloads
 - 📁 Choose format & quality (MP4, best audio-only, etc.)
 - 📋 Paste-and-go: just drop in a URL
 - 📃 Batch downloads via a queue
-- 🧩 Extensible — add support for new sites via plugins/extractors
 
 ## Screenshots
 
 *(Add a screenshot or GIF of the app here once available)*
+
+## Requirements
+
+StreamHarvest bundles/relies on [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its download engine. Prebuilt releases include everything you need; if building from source, make sure `yt-dlp` (and `ffmpeg` for format conversion/merging) are available.
 
 ## Installation
 
@@ -66,22 +69,20 @@ npm run package     # create platform installers
 
 ## Supported Sites
 
-StreamHarvest aims to support most sites out of the box. If a site isn't supported, you can open an issue or contribute an extractor — see [Contributing](#contributing).
+Site support is provided entirely by [yt-dlp](https://github.com/yt-dlp/yt-dlp), which supports a very large number of sites out of the box. See yt-dlp's [supported sites list](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) for details. StreamHarvest does not maintain its own site extractors — if a site isn't working, it's likely a yt-dlp issue or an outdated yt-dlp version bundled with the app.
 
-## Contributing
+## Updating yt-dlp
 
-Contributions are welcome! To add support for a new site, check out the `extractors/` directory for examples, then open a pull request.
-
-```bash
-git checkout -b feature/my-extractor
-# make changes
-npm test
-git commit -m "Add extractor for X"
-```
+Since site support depends on yt-dlp, keeping it up to date matters. StreamHarvest will (or should) periodically check for and update its bundled yt-dlp binary.
 
 ## Disclaimer
 
 StreamHarvest is intended for personal and educational use only. Downloading content may be subject to the terms of service of the site you're downloading from, as well as copyright law in your jurisdiction. Users are responsible for ensuring their use complies with applicable laws and terms of service.
+
+## Credits
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — the download engine powering StreamHarvest
+- [Electron](https://www.electronjs.org/) — desktop app framework
 
 ## License
 
