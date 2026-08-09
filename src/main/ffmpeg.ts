@@ -111,7 +111,11 @@ export async function downloadFfmpeg(onProgress: (p: BinaryProgress) => void, on
   const dest = ffmpegManagedPath()
   const target = archiveTarget()
   if (!target.url) {
-    throw new Error('Auto-installing ffmpeg is not supported on this platform yet. Please install ffmpeg and add it to PATH.')
+    const msg =
+      process.platform === 'darwin'
+        ? 'Auto-installing ffmpeg is not available on macOS. Install it with Homebrew:\n\n  brew install ffmpeg\n\nThen check again or restart StreamHarvest.'
+        : 'Auto-installing ffmpeg is not supported on this platform yet. Please install ffmpeg and add it to PATH.'
+    throw new Error(msg)
   }
   await mkdir(storeDir, { recursive: true })
 

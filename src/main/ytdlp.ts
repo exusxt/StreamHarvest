@@ -18,6 +18,20 @@ export function ytDlpExeName(): string {
   return process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
 }
 
+/**
+ * GitHub release asset name of the standalone binary for this OS + arch.
+ * yt-dlp publishes prebuilt executables per platform (the generic `yt-dlp`
+ * zipapp is a last resort since it needs a Python interpreter).
+ */
+function downloadAssetName(): string {
+  const platform = process.platform
+  const arch = process.arch
+  if (platform === 'win32') return arch === 'arm64' ? 'yt-dlp_arm64.exe' : 'yt-dlp.exe'
+  if (platform === 'darwin') return 'yt-dlp_macos' // universal (x64 + arm64)
+  if (platform === 'linux') return arch === 'arm64' ? 'yt-dlp_linux_aarch64' : 'yt-dlp_linux'
+  return 'yt-dlp' // generic zipimport binary, needs Python
+}
+
 /** Persistent storage folder for the downloaded binary. */
 export function ytDlpStoreDir(): string {
   return join(app.getPath('userData'), 'yt-dlp')
@@ -59,8 +73,7 @@ export async function latestReleaseTag(): Promise<string | null> {
 
 /** Latest downloadable binary URL (redirects to the actual asset). */
 function latestBinaryUrl(): string {
-  const name = ytDlpExeName()
-  return `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${name}`
+  return `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${downloadAssetName()}`
 }
 
 /**
@@ -83,6 +96,15 @@ export async function downloadYtDlp(
     onProgress
   })
   await rename(tmp, dest)
+  if (process.platform !== 'win32') {
+    // HTTP downloads don't preserve the execute bit on unix-like systems.
+    try {
+      const { chmod } = await import('node:fs/promises')
+      await chmod(dest, 0o755)
+    } catch {
+      // best-effort
+    }
+  }
   onStatus('Installed — checking version…')
   const version = await ytDlpVersion(dest)
   onStatus(version ? `yt-dlp ${version} ready` : 'yt-dlp installed')

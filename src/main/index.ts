@@ -45,7 +45,8 @@ function registerIpc(): void {
       ytDlp: yd,
       ffmpeg,
       downloadsDir: getSettings().downloadsDir,
-      pythonStatus: null
+      pythonStatus: null,
+      platform: process.platform
     }
   })
 

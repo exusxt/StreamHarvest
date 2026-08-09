@@ -238,6 +238,13 @@ export function SettingsScreen({
                     </Button>
                   ) : null}
                 </>
+              ) : status?.platform === 'darwin' ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="rounded-md border border-sc64-border bg-sc64-panel px-2 py-1 font-mono text-xs text-sc64-text">
+                    brew install ffmpeg
+                  </code>
+                  <span className="text-xs text-sc64-muted">then reopen Settings to detect it</span>
+                </div>
               ) : (
                 <Button variant="primary" size="sm" disabled={ffmpegBusy} onClick={onInstallFfmpeg}>
                   {ffmpegBusy ? <Spinner className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}

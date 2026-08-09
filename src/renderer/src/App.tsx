@@ -193,6 +193,7 @@ export default function App(): React.JSX.Element {
   }
 
   const activeCount = jobs.filter((j) => j.status === 'downloading' || j.status === 'queued').length
+  const isMac = status?.platform === 'darwin'
 
   const screenEl = useMemo(() => {
     switch (screen) {
@@ -287,8 +288,10 @@ export default function App(): React.JSX.Element {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-sc64-text">ffmpeg is missing</p>
                     <p className="text-xs text-sc64-muted">
-                      ffmpeg is needed to merge video + audio streams and to convert formats. Download it so every quality
-                      works.
+                      ffmpeg is needed to merge video + audio streams and to convert formats.{' '}
+                      {isMac
+                        ? 'Install it with Homebrew (one command) to enable every quality.'
+                        : 'Download it so every quality works.'}
                     </p>
                     {ffmpegError ? <p className="mt-1 text-xs text-sc64-bad">{ffmpegError}</p> : null}
                     {ffmpegProgress && ffmpegProgress.total > 0 ? (
@@ -299,13 +302,26 @@ export default function App(): React.JSX.Element {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="primary" size="sm" disabled={ffmpegBusy} onClick={() => void installFfmpeg()}>
-                    {ffmpegBusy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    {ffmpegBusy ? 'Installing…' : 'Download ffmpeg'}
-                  </Button>
-                  <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={() => setFfmpegBannerDismissed(true)} title="Dismiss">
-                    <X className="h-4 w-4" />
-                  </Button>
+                  {isMac ? (
+                    <>
+                      <code className="rounded-md border border-sc64-border bg-sc64-panel px-2.5 py-1.5 font-mono text-xs text-sc64-text">
+                        brew install ffmpeg
+                      </code>
+                      <Button variant="outline" size="sm" onClick={() => void refreshStatus()}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Check again
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="primary" size="sm" disabled={ffmpegBusy} onClick={() => void installFfmpeg()}>
+                        {ffmpegBusy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        {ffmpegBusy ? 'Installing…' : 'Download ffmpeg'}
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={() => setFfmpegBannerDismissed(true)} title="Dismiss">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

@@ -10,6 +10,8 @@ export interface AppStatus {
   ffmpeg: FfmpegStatus
   downloadsDir: string
   pythonStatus: string | null
+  /** `process.platform` value ('win32' | 'darwin' | 'linux'), for UI guidance. */
+  platform: string
 }
 
 /** Presence and version info for the yt-dlp engine binary. */
