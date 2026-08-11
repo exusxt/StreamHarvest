@@ -176,6 +176,12 @@ function registerIpc(): void {
   ipcMain.handle('win:close', () => mainWindow?.close())
 }
 
+/** Absolute path of the app window icon (icon.ico on Windows, icon.png elsewhere). */
+function windowIconPath(): string {
+  const name = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  return join(app.getAppPath(), 'resources', name)
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -183,6 +189,7 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 620,
     title: 'StreamHarvest',
+    icon: windowIconPath(),
     backgroundColor: '#0b1020',
     frame: false,
     show: false,
@@ -210,6 +217,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  // Windows taskbar groups windows by AppUserModelId; setting it explicitly
+  // also fixes the "black icon in taskbar" issue with packaged apps.
+  if (process.platform === 'win32') app.setAppUserModelId('com.streamharvest.app')
   await loadSettings()
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
