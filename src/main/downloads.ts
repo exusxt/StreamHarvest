@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, Notification } from 'electron'
-import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, PlaylistEntry, VideoMetadata } from '../shared/types'
+import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, OutputFormat, OutputLayout, PlaylistEntry, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
 import { ytDlpPath } from './ytdlp'
@@ -21,6 +21,62 @@ interface JobOptions {
   formatId?: string
   playlist: boolean
   playlistItems?: string
+}
+
+/** Resolves a settings value to a yt-dlp `-o` template with subfolder layout. */
+function outputTemplate(layout: OutputLayout): string {
+  switch (layout) {
+    case 'site':
+      return `%(extractor_key)s/%(title)s [%(id)s].%(ext)s`
+    case 'date':
+      return `%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s].%(ext)s`
+    case 'playlist':
+      return `%(playlist_title|Video)s/%(title)s [%(id)s].%(ext)s`
+    default:
+      return `%(title)s [%(id)s].%(ext)s`
+  }
+}
+
+/** Container extension used for `--remux-video`, or null to keep the source. */
+function remuxExtension(format: OutputFormat): string | null {
+  return format === 'original' ? null : format
+}
+
+/** True when ffmpeg is reachable (managed copy or on PATH). */
+function ffmpegAvailableSync(): boolean {
+  if (existsSync(ffmpegManagedPath())) return true
+  const exe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+  const pathVar = process.env.PATH ?? ''
+  const dirs = pathVar.split(process.platform === 'win32' ? ';' : ':')
+  for (const dir of dirs) {
+    if (!dir) continue
+    try {
+      if (existsSync(join(dir.trim(), exe))) return true
+    } catch {
+      // unreadable PATH entry — keep scanning
+    }
+  }
+  return false
+}
+
+/** Recursively collects file paths matching a predicate under a directory. */
+function walkFiles(dir: string, match: (name: string) => boolean, depth = 0): string[] {
+  if (depth > 6) return []
+  const out: string[] = []
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      out.push(...walkFiles(join(dir, e.name), match, depth + 1))
+    } else if (e.isFile() && match(e.name)) {
+      out.push(join(dir, e.name))
+    }
+  }
+  return out
 }
 
 interface StartParams {
@@ -276,13 +332,11 @@ export class DownloadManager {
       if (pid) {
         try {
           const dir = this.getSettings().downloadsDir
-          for (const name of readdirSync(dir)) {
-            if (name.includes(`[${pid}]`) && name.endsWith('.part')) {
-              try {
-                rmSync(join(dir, name), { force: true })
-              } catch {
-                // best-effort
-              }
+          for (const name of walkFiles(dir, (n) => n.includes(`[${pid}]`) && n.endsWith('.part'))) {
+            try {
+              rmSync(name, { force: true })
+            } catch {
+              // best-effort
             }
           }
         } catch {
@@ -323,12 +377,28 @@ export class DownloadManager {
     const opts = this.options.get(job.id) ?? { presetId: 'best', playlist: false }
     const preset = QUALITY_PRESETS.find((p) => p.id === opts.presetId) ?? QUALITY_PRESETS[0]
     const selector = opts.formatId ? `${opts.formatId}+bestaudio/best` : preset.selector
-    const args = ['--newline', '--no-warnings', '-f', selector, '-o', join(this.getSettings().downloadsDir, '%(title)s [%(id)s].%(ext)s')]
+    const settings = this.getSettings()
+    const template = outputTemplate(settings.outputLayout)
+    const args = ['--newline', '--no-warnings', '-f', selector, '-o', join(settings.downloadsDir, template)]
     const managedFfmpeg = ffmpegManagedPath()
     if (managedFfmpeg) args.push('--ffmpeg-location', ffmpegStoreDir())
     if (preset.extraArgs) args.push(...preset.extraArgs)
     if (!opts.playlist) args.push('--no-playlist')
     if (opts.playlist && opts.playlistItems) args.push('--playlist-items', opts.playlistItems)
+
+    // Phase 3 media quality flags. ffmpeg-only features are gated on an actual
+    // ffmpeg being present so downloads without ffmpeg keep working.
+    if (ffmpegAvailableSync()) {
+      if (settings.embedMetadata) args.push('--embed-metadata')
+      if (settings.embedThumbnail) args.push('--embed-thumbnail')
+      const remux = remuxExtension(settings.outputFormat)
+      if (remux && !preset.extraArgs?.includes('--extract-audio')) args.push('--remux-video', remux)
+      if (settings.embedSubtitles && settings.subtitles) args.push('--embed-subs')
+    }
+    if (settings.subtitles) {
+      const langs = settings.subtitleLangs.trim().replace(/\s+/g, '') || 'en'
+      args.push('--write-subs', '--sub-langs', langs, '--sub-format', 'best')
+    }
     args.push(job.url)
 
     job.status = 'downloading'
@@ -446,12 +516,10 @@ export class DownloadManager {
       const dir = this.getSettings().downloadsDir
       let best: { name: string; mtime: number } | null = null
       try {
-        for (const name of readdirSync(dir)) {
-          if (!name.includes(`[${id}]`) || name.endsWith('.part')) continue
-          const full = join(dir, name)
+        for (const name of walkFiles(dir, (n) => n.includes(`[${id}]`) && !n.endsWith('.part'))) {
           let mtime = 0
           try {
-            mtime = statSync(full).mtimeMs
+            mtime = statSync(name).mtimeMs
           } catch {
             continue
           }
@@ -461,7 +529,7 @@ export class DownloadManager {
         // downloads dir unreadable — fall through to best effort
       }
       if (best) {
-        job.filePath = join(dir, best.name)
+        job.filePath = best.name
         return
       }
     }

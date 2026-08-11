@@ -326,19 +326,41 @@ function resolveOnDisk(p: string, downloadsDir: string): string | null {
     const id = p.match(/\[([A-Za-z0-9_-]{6,24})\](?:\.part)?\.[^.]+$/)?.[1]
     if (id && downloadsDir) {
       let best: { name: string; mtime: number } | null = null
-      for (const name of readdirSync(downloadsDir)) {
-        if (name.includes(`[${id}]`) && !name.endsWith('.part')) {
-          const full = join(downloadsDir, name)
-          const st = statSync(full)
-          if (!best || st.mtimeMs > best.mtime) best = { name, mtime: st.mtimeMs }
+      for (const name of walkFilesSync(downloadsDir, (n) => n.includes(`[${id}]`) && !n.endsWith('.part'))) {
+        let st
+        try {
+          st = statSync(name)
+        } catch {
+          continue
         }
+        if (!best || st.mtimeMs > best.mtime) best = { name, mtime: st.mtimeMs }
       }
-      if (best) return join(downloadsDir, best.name)
+      if (best) return best.name
     }
   } catch {
     // ignore read errors — fall through
   }
   return null
+}
+
+/** Recursively collects file paths matching a predicate under a directory. */
+function walkFilesSync(dir: string, match: (name: string) => boolean, depth = 0): string[] {
+  if (depth > 6) return []
+  const out: string[] = []
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      out.push(...walkFilesSync(join(dir, e.name), match, depth + 1))
+    } else if (e.isFile() && match(e.name)) {
+      out.push(join(dir, e.name))
+    }
+  }
+  return out
 }
 
 /** True when version a is strictly older than b (numeric segment compare). */

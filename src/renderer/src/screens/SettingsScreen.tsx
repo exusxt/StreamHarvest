@@ -3,8 +3,8 @@
  * engine section (yt-dlp and ffmpeg install / update / check / remove).
  */
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Film, Folder, FolderOpen, Palette, RefreshCw, Settings2, Trash2, Wrench, Zap } from 'lucide-react'
-import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, YtDlpCheckResult } from '../../../shared/types'
+import { Captions, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Palette, RefreshCw, Settings2, Trash2, Wrench, Zap } from 'lucide-react'
+import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, OutputFormat, OutputLayout, YtDlpCheckResult } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { Badge, Button, Checkbox, Field, Input, Panel, ProgressBar, Select, Spinner } from '../components/ui'
 import { cn, formatBytes, THEMES, THEME_IDS, THEME_NAMES, type ThemeId } from '../lib'
@@ -215,6 +215,84 @@ export function SettingsScreen({
           />
         </div>
         {saved ? <p className="mt-3 text-xs text-sc64-good">Settings saved.</p> : null}
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <Clapperboard className="h-3.5 w-3.5" /> Media quality
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Output format" hint="Convert the container after downloading (needs ffmpeg).">
+            <Select
+              value={settings?.outputFormat ?? 'original'}
+              onChange={(e) => update({ outputFormat: e.target.value as OutputFormat })}
+            >
+              <option value="original">Keep original</option>
+              <option value="mp4">MP4</option>
+              <option value="mkv">MKV</option>
+              <option value="webm">WebM</option>
+            </Select>
+          </Field>
+          <Field label="Folder layout" hint="How finished files are organized in the download folder.">
+            <Select
+              value={settings?.outputLayout ?? 'flat'}
+              onChange={(e) => update({ outputLayout: e.target.value as OutputLayout })}
+            >
+              <option value="flat">One flat folder</option>
+              <option value="site">By site (YouTube, Vimeo, …)</option>
+              <option value="date">By date</option>
+              <option value="playlist">By playlist</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Checkbox
+            label="Embed metadata"
+            hint="Write the title, uploader and description into the file itself."
+            checked={settings?.embedMetadata ?? true}
+            onChange={(v) => update({ embedMetadata: v })}
+          />
+        </div>
+        <div className="mt-3">
+          <Checkbox
+            label="Embed thumbnail"
+            hint="Store the video thumbnail inside the file."
+            checked={settings?.embedThumbnail ?? true}
+            onChange={(v) => update({ embedThumbnail: v })}
+          />
+        </div>
+        <div className="mt-3">
+          <Checkbox
+            label="Download subtitles"
+            hint="Fetch subtitle tracks for the languages below."
+            checked={settings?.subtitles ?? false}
+            onChange={(v) => update({ subtitles: v })}
+          />
+        </div>
+        {settings?.subtitles ? (
+          <>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <Field label="Subtitle languages" hint="Comma-separated codes, e.g. en,de,es">
+                <Input
+                  value={settings?.subtitleLangs ?? 'en'}
+                  onChange={(e) => update({ subtitleLangs: e.target.value })}
+                  placeholder="en,de,es"
+                />
+              </Field>
+              <div className="flex items-end pb-1">
+                <Checkbox
+                  label="Embed subtitles"
+                  hint="Mux the subtitles into the video file."
+                  checked={settings?.embedSubtitles ?? false}
+                  onChange={(v) => update({ embedSubtitles: v })}
+                />
+              </div>
+            </div>
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-sc64-muted">
+              <Captions className="h-3 w-3" /> Only tracks the site provides for the selected languages will be saved.
+            </p>
+          </>
+        ) : null}
       </Panel>
 
       <Panel>

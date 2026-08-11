@@ -15,7 +15,14 @@ const DEFAULTS: AppSettings = {
   audioOnly: false,
   clipboardMonitor: true,
   minimizeToTray: false,
-  notifications: true
+  notifications: true,
+  embedMetadata: true,
+  embedThumbnail: true,
+  outputFormat: 'original',
+  outputLayout: 'flat',
+  subtitles: false,
+  subtitleLangs: 'en',
+  embedSubtitles: false
 }
 
 let settings: AppSettings = { ...DEFAULTS }
@@ -34,6 +41,13 @@ export async function loadSettings(): Promise<void> {
     settings.clipboardMonitor = settings.clipboardMonitor !== false
     settings.minimizeToTray = settings.minimizeToTray === true
     settings.notifications = settings.notifications !== false
+    settings.embedMetadata = settings.embedMetadata !== false
+    settings.embedThumbnail = settings.embedThumbnail !== false
+    settings.outputFormat = ['original', 'mp4', 'mkv', 'webm'].includes(settings.outputFormat ?? '') ? settings.outputFormat : 'original'
+    settings.outputLayout = ['flat', 'site', 'date', 'playlist'].includes(settings.outputLayout ?? '') ? settings.outputLayout : 'flat'
+    settings.subtitles = settings.subtitles === true
+    settings.embedSubtitles = settings.embedSubtitles === true
+    if (typeof settings.subtitleLangs !== 'string' || !settings.subtitleLangs.trim()) settings.subtitleLangs = DEFAULTS.subtitleLangs
   } catch {
     // no settings yet — keep defaults
   }

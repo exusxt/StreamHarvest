@@ -113,6 +113,12 @@ export interface DownloadJob {
   completedAt: string | null
 }
 
+/** Output container for remuxing (--remux-video); 'original' keeps the source. */
+export type OutputFormat = 'original' | 'mp4' | 'mkv' | 'webm'
+
+/** How downloaded files are organized into subfolders of the downloads dir. */
+export type OutputLayout = 'flat' | 'site' | 'date' | 'playlist'
+
 /** User-adjustable app settings, persisted to disk. */
 export interface AppSettings {
   downloadsDir: string
@@ -125,6 +131,20 @@ export interface AppSettings {
   minimizeToTray: boolean
   /** Show OS notifications when downloads finish or fail. */
   notifications: boolean
+  /** Embed metadata (title, artist, description) into the file. */
+  embedMetadata: boolean
+  /** Embed the video thumbnail into the file. */
+  embedThumbnail: boolean
+  /** Output container for remuxing; 'original' keeps the source container. */
+  outputFormat: OutputFormat
+  /** Output folder layout (flat / by site / by date / by playlist). */
+  outputLayout: OutputLayout
+  /** Download subtitle tracks. */
+  subtitles: boolean
+  /** Comma-separated subtitle language codes, e.g. 'en,de'. */
+  subtitleLangs: string
+  /** Mux downloaded subtitles into the file. */
+  embedSubtitles: boolean
 }
 
 /** Result of an install/update operation on the yt-dlp binary. */
