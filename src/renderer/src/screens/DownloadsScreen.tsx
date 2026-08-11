@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, FolderOpen, History, ListPlus, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
 import type { DownloadJob } from '../../../shared/types'
 import { extractUrls } from '../../../shared/urls'
+import { useT, type TFunc } from '../i18n'
 import { Badge, Button, Panel, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib'
 
@@ -32,6 +33,25 @@ function statusTone(job: DownloadJob): 'accent' | 'good' | 'warn' | 'bad' | 'def
   }
 }
 
+function statusLabel(t: TFunc, job: DownloadJob): string {
+  switch (job.status) {
+    case 'queued':
+      return t('downloads.status.queued')
+    case 'fetching':
+      return t('downloads.status.fetching')
+    case 'downloading':
+      return t('downloads.status.downloading')
+    case 'paused':
+      return t('downloads.status.paused')
+    case 'completed':
+      return t('downloads.status.completed')
+    case 'failed':
+      return t('downloads.status.failed')
+    case 'cancelled':
+      return t('downloads.status.cancelled')
+  }
+}
+
 function JobRow({
   job,
   first,
@@ -45,6 +65,7 @@ function JobRow({
   onMove: (job: DownloadJob, direction: -1 | 1) => void
   onRestart: (job: DownloadJob) => void
 }): React.JSX.Element {
+  const t = useT()
   const active = ACTIVE.has(job.status)
   const showProgress = job.status === 'downloading' || job.status === 'paused'
 
@@ -71,7 +92,7 @@ function JobRow({
                 </p>
               ) : null}
             </div>
-            <Badge tone={statusTone(job)}>{job.status}</Badge>
+            <Badge tone={statusTone(job)}>{statusLabel(t, job)}</Badge>
           </div>
 
           {showProgress ? (
@@ -81,7 +102,7 @@ function JobRow({
                 <span>
                   {formatBytes(job.bytesReceived)} / {formatBytes(job.bytesTotal)}
                 </span>
-                <span>{job.eta ? `ETA ${job.eta}` : ''}</span>
+                <span>{job.eta ? t('downloads.eta', { eta: job.eta }) : ''}</span>
               </div>
             </div>
           ) : null}
@@ -92,44 +113,44 @@ function JobRow({
             {job.status === 'downloading' ? (
               <>
                 <Button variant="outline" size="sm" onClick={() => void window.api.pauseDownload(job.id)}>
-                  <Pause className="h-3.5 w-3.5" /> Pause
+                  <Pause className="h-3.5 w-3.5" /> {t('downloads.pause')}
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => void window.api.cancelDownload(job.id)}>
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" /> {t('downloads.cancel')}
                 </Button>
               </>
             ) : job.status === 'paused' ? (
               <>
                 <Button variant="primary" size="sm" onClick={() => void window.api.resumeDownload(job.id)}>
-                  <Play className="h-3.5 w-3.5" /> Resume
+                  <Play className="h-3.5 w-3.5" /> {t('downloads.resume')}
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => void window.api.cancelDownload(job.id)}>
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" /> {t('downloads.cancel')}
                 </Button>
               </>
             ) : job.status === 'queued' ? (
               <>
-                <Button variant="outline" size="sm" disabled={first} onClick={() => onMove(job, -1)} title="Move up in queue">
+                <Button variant="outline" size="sm" disabled={first} onClick={() => onMove(job, -1)} title={t('downloads.moveUp')}>
                   <ArrowUp className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="outline" size="sm" disabled={last} onClick={() => onMove(job, 1)} title="Move down in queue">
+                <Button variant="outline" size="sm" disabled={last} onClick={() => onMove(job, 1)} title={t('downloads.moveDown')}>
                   <ArrowDown className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => void window.api.cancelDownload(job.id)}>
-                  <X className="h-3.5 w-3.5" /> Remove from queue
+                  <X className="h-3.5 w-3.5" /> {t('downloads.removeQueue')}
                 </Button>
               </>
             ) : null}
 
             {job.status === 'completed' && job.filePath ? (
               <Button variant="outline" size="sm" onClick={() => void window.api.reveal(job.filePath ?? '')}>
-                <FolderOpen className="h-3.5 w-3.5" /> Show in folder
+                <FolderOpen className="h-3.5 w-3.5" /> {t('downloads.showInFolder')}
               </Button>
             ) : null}
 
             {!active ? (
               <Button variant="outline" size="sm" onClick={() => onRestart(job)}>
-                <RotateCw className="h-3.5 w-3.5" /> Re-download
+                <RotateCw className="h-3.5 w-3.5" /> {t('downloads.redownload')}
               </Button>
             ) : null}
           </div>
@@ -146,6 +167,7 @@ export function DownloadsScreen({
   jobs: DownloadJob[]
   onMove: (id: string, direction: -1 | 1) => void
 }): React.JSX.Element {
+  const t = useT()
   const [restarting, setRestarting] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
@@ -201,15 +223,15 @@ export function DownloadsScreen({
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold text-sc64-text">
-          <History className="h-5 w-5 text-sc64-accent" /> Downloads
+          <History className="h-5 w-5 text-sc64-accent" /> {t('downloads.title')}
         </h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setImportOpen((o) => !o)}>
-            <ListPlus className="h-3.5 w-3.5" /> Add URLs
+            <ListPlus className="h-3.5 w-3.5" /> {t('downloads.addUrls')}
           </Button>
           {history.length > 0 ? (
             <Button variant="ghost" size="sm" onClick={() => void window.api.clearHistory()}>
-              <Trash2 className="h-3.5 w-3.5" /> Clear history
+              <Trash2 className="h-3.5 w-3.5" /> {t('downloads.clearHistory')}
             </Button>
           ) : null}
         </div>
@@ -218,12 +240,12 @@ export function DownloadsScreen({
       {importOpen ? (
         <Panel>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-sc64-text">Batch add</p>
+            <p className="text-xs font-semibold text-sc64-text">{t('downloads.batchAdd')}</p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={importing} onClick={() => void addFromFile()}>
-                <FolderOpen className="h-3.5 w-3.5" /> Import .txt
+                <FolderOpen className="h-3.5 w-3.5" /> {t('downloads.importTxt')}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setImportOpen(false)} title="Close">
+              <Button variant="ghost" size="sm" onClick={() => setImportOpen(false)} title={t('titlebar.close')}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -231,7 +253,7 @@ export function DownloadsScreen({
           <textarea
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
-            placeholder={'Paste links, one per line:\nhttps://…\nhttps://…'}
+            placeholder={t('downloads.bulkPlaceholder')}
             rows={4}
             className="w-full resize-y rounded-md border border-sc64-border bg-sc64-panel2 px-3 py-2 font-mono text-xs text-sc64-text outline-none placeholder:text-sc64-muted focus:border-sc64-accent"
           />
@@ -239,14 +261,14 @@ export function DownloadsScreen({
             <p className="text-xs text-sc64-muted">
               {importing ? (
                 <>
-                  <Spinner className="mr-1 inline h-3 w-3" /> Adding…
+                  <Spinner className="mr-1 inline h-3 w-3" /> {t('downloads.adding')}
                 </>
               ) : (
-                `${extractUrls(bulkText).length} link(s) detected`
+                t('downloads.linksDetected', { count: extractUrls(bulkText).length })
               )}
             </p>
             <Button variant="primary" size="sm" disabled={importing || extractUrls(bulkText).length === 0} onClick={() => void addFromText()}>
-              <ListPlus className="h-3.5 w-3.5" /> Add to queue
+              <ListPlus className="h-3.5 w-3.5" /> {t('downloads.addToQueue')}
             </Button>
           </div>
         </Panel>
@@ -269,7 +291,7 @@ export function DownloadsScreen({
 
       {history.length > 0 ? (
         <>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-sc64-muted">History</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-sc64-muted">{t('downloads.history')}</h3>
           <div className="space-y-3">
             {history.map((job) => (
               <JobRow
@@ -288,13 +310,13 @@ export function DownloadsScreen({
       {jobs.length === 0 ? (
         <Panel className="flex flex-col items-center justify-center gap-2 py-12 text-center">
           <History className="h-8 w-8 text-sc64-muted" />
-          <p className="text-sm text-sc64-muted">No downloads yet — head to Home and paste a link.</p>
+          <p className="text-sm text-sc64-muted">{t('downloads.empty')}</p>
         </Panel>
       ) : null}
 
       {restarting ? (
         <div className="flex items-center gap-2 text-xs text-sc64-muted">
-          <Spinner className="h-3.5 w-3.5" /> Restarting download…
+          <Spinner className="h-3.5 w-3.5" /> {t('downloads.restarting')}
         </div>
       ) : null}
     </div>

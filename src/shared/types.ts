@@ -119,6 +119,9 @@ export type OutputFormat = 'original' | 'mp4' | 'mkv' | 'webm'
 /** How downloaded files are organized into subfolders of the downloads dir. */
 export type OutputLayout = 'flat' | 'site' | 'date' | 'playlist'
 
+/** UI language selection (Phase 4: English + German first). */
+export type Language = 'en' | 'de'
+
 /** User-adjustable app settings, persisted to disk. */
 export interface AppSettings {
   downloadsDir: string
@@ -145,6 +148,20 @@ export interface AppSettings {
   subtitleLangs: string
   /** Mux downloaded subtitles into the file. */
   embedSubtitles: boolean
+  /** UI language for the interface and notifications. */
+  language: Language
+  /** Global hotkey opens the app and pastes the copied link (Cmd/Ctrl+Shift+D). */
+  globalHotkey: boolean
+  /** yt-dlp `--limit-rate` value, e.g. '500K' or '1M'; empty means unlimited. */
+  speedLimit: string
+  /** yt-dlp `--proxy` value (http/socks); empty means direct connection. */
+  proxy: string
+  /** Pass raw yt-dlp arguments from the advanced-mode box. */
+  advancedMode: boolean
+  /** Raw yt-dlp arguments appended when advancedMode is enabled. */
+  extraArgs: string
+  /** Whether the first-run onboarding was completed or dismissed. */
+  onboarded: boolean
 }
 
 /** Result of an install/update operation on the yt-dlp binary. */

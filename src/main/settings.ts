@@ -22,7 +22,14 @@ const DEFAULTS: AppSettings = {
   outputLayout: 'flat',
   subtitles: false,
   subtitleLangs: 'en',
-  embedSubtitles: false
+  embedSubtitles: false,
+  language: 'en',
+  globalHotkey: true,
+  speedLimit: '',
+  proxy: '',
+  advancedMode: false,
+  extraArgs: '',
+  onboarded: false
 }
 
 let settings: AppSettings = { ...DEFAULTS }
@@ -48,6 +55,13 @@ export async function loadSettings(): Promise<void> {
     settings.subtitles = settings.subtitles === true
     settings.embedSubtitles = settings.embedSubtitles === true
     if (typeof settings.subtitleLangs !== 'string' || !settings.subtitleLangs.trim()) settings.subtitleLangs = DEFAULTS.subtitleLangs
+    settings.language = settings.language === 'de' ? 'de' : 'en'
+    settings.globalHotkey = settings.globalHotkey !== false
+    if (typeof settings.speedLimit !== 'string') settings.speedLimit = DEFAULTS.speedLimit
+    if (typeof settings.proxy !== 'string') settings.proxy = DEFAULTS.proxy
+    settings.advancedMode = settings.advancedMode === true
+    if (typeof settings.extraArgs !== 'string') settings.extraArgs = DEFAULTS.extraArgs
+    settings.onboarded = settings.onboarded === true
   } catch {
     // no settings yet — keep defaults
   }

@@ -4,6 +4,7 @@
  */
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { AppStatus } from '../../../shared/types'
+import { useT } from '../i18n'
 import { Badge, Button, Spinner } from './ui'
 import appIcon from '../assets/app-icon.png'
 
@@ -18,6 +19,7 @@ export function Header({
   onRefresh: () => void
   activeCount: number
 }): React.JSX.Element {
+  const t = useT()
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -26,7 +28,7 @@ export function Header({
         </div>
         <div>
           <h1 className="text-lg font-bold leading-tight text-sc64-text">StreamHarvest</h1>
-          <p className="text-xs text-sc64-muted">Paste a link, pick a quality, download</p>
+          <p className="text-xs text-sc64-muted">{t('header.tagline')}</p>
         </div>
       </div>
 
@@ -36,7 +38,7 @@ export function Header({
         ) : (
           <Badge tone="bad">
             <AlertTriangle className="h-3 w-3" />
-            yt-dlp missing
+            {t('header.ytdlpMissing')}
           </Badge>
         )}
         {status ? (
@@ -45,14 +47,14 @@ export function Header({
           ) : (
             <Badge tone="warn">
               <AlertTriangle className="h-3 w-3" />
-              ffmpeg not found
+              {t('header.ffmpegMissing')}
             </Badge>
           )
         ) : null}
-        {activeCount > 0 ? <Badge tone="accent">{activeCount} active</Badge> : null}
+        {activeCount > 0 ? <Badge tone="accent">{t('header.active', { count: activeCount })}</Badge> : null}
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Refresh
+          {t('header.refresh')}
         </Button>
       </div>
     </header>

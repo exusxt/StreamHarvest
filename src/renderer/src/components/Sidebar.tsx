@@ -4,15 +4,10 @@
  * panel/border styling from the Summer Breeze design system.
  */
 import { Home, History, Settings } from 'lucide-react'
+import { useT } from '../i18n'
 import { cn } from '../lib'
 
 export type ScreenId = 'home' | 'downloads' | 'settings'
-
-const ITEMS: Array<{ id: ScreenId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'downloads', label: 'Downloads', icon: History },
-  { id: 'settings', label: 'Settings', icon: Settings }
-]
 
 export function Sidebar({
   active,
@@ -23,6 +18,12 @@ export function Sidebar({
   onNavigate: (id: ScreenId) => void
   disabled: boolean
 }): React.JSX.Element {
+  const t = useT()
+  const ITEMS: Array<{ id: ScreenId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { id: 'home', label: t('nav.home'), icon: Home },
+    { id: 'downloads', label: t('nav.downloads'), icon: History },
+    { id: 'settings', label: t('nav.settings'), icon: Settings }
+  ]
   return (
     <nav className="flex w-56 shrink-0 flex-col gap-1 overflow-y-auto border-r border-sc64-border bg-sc64-panel/50 p-2">
       {ITEMS.map((item) => {

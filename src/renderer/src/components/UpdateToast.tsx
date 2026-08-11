@@ -6,6 +6,7 @@
  */
 import React from 'react'
 import type { UpdateState } from '../../../shared/types'
+import { useT } from '../i18n'
 import { Button, ProgressBar, Spinner } from './ui'
 
 export function UpdateToast({
@@ -15,18 +16,19 @@ export function UpdateToast({
   state: UpdateState
   onDismiss: () => void
 }): React.JSX.Element {
+  const t = useT()
   const title = ((): string => {
     switch (state.state) {
       case 'checking':
-        return 'Checking for updates…'
+        return t('updates.checking')
       case 'available':
-        return `Update available: v${state.version ?? ''}`
+        return t('updates.available', { version: state.version ?? '' })
       case 'downloading':
-        return `Downloading update v${state.version ?? ''}…`
+        return t('updates.downloading', { version: state.version ?? '' })
       case 'downloaded':
-        return `Update v${state.version ?? ''} ready`
+        return t('updates.downloaded', { version: state.version ?? '' })
       case 'error':
-        return 'Update failed'
+        return t('updates.failed')
       default:
         return ''
     }
@@ -54,11 +56,11 @@ export function UpdateToast({
               className="mt-2"
             />
           ) : state.state === 'available' ? (
-            <div className="mt-1 text-xs text-sc64-muted">Downloading in the background…</div>
+            <div className="mt-1 text-xs text-sc64-muted">{t('updates.background')}</div>
           ) : state.state === 'error' && state.message ? (
             <div className="mt-1 break-words text-xs text-sc64-muted">{state.message}</div>
           ) : state.state === 'downloaded' ? (
-            <div className="mt-1 text-xs text-sc64-muted">Restart to apply the update.</div>
+            <div className="mt-1 text-xs text-sc64-muted">{t('updates.restartToApply')}</div>
           ) : null}
         </div>
         {state.state === 'error' || state.state === 'not-available' ? (
@@ -79,7 +81,7 @@ export function UpdateToast({
             className="w-full"
             onClick={() => void window.api.installUpdate()}
           >
-            Restart and install
+            {t('updates.restartInstall')}
           </Button>
         </div>
       ) : null}

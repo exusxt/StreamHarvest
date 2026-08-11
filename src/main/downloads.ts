@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { app, Notification } from 'electron'
 import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, OutputFormat, OutputLayout, PlaylistEntry, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
+import { translate } from '../shared/i18n'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
 import { ytDlpPath } from './ytdlp'
 
@@ -399,7 +400,17 @@ export class DownloadManager {
       const langs = settings.subtitleLangs.trim().replace(/\s+/g, '') || 'en'
       args.push('--write-subs', '--sub-langs', langs, '--sub-format', 'best')
     }
+
+    // Phase 4 network flags.
+    if (settings.speedLimit.trim()) args.push('--limit-rate', settings.speedLimit.trim())
+    if (settings.proxy.trim()) args.push('--proxy', settings.proxy.trim())
     args.push(job.url)
+
+    // Phase 4 advanced mode: raw passthrough appended last so it can override
+    // any flag built above (yt-dlp applies later options first).
+    if (settings.advancedMode && settings.extraArgs.trim()) {
+      args.push(...splitArgs(settings.extraArgs))
+    }
 
     job.status = 'downloading'
     job.progress = 0
@@ -573,10 +584,12 @@ export class DownloadManager {
     if (!this.getSettings().notifications) return
     if (!Notification.isSupported()) return
     const done = job.status === 'completed'
+    const lang = this.getSettings().language
+    const title = translate(lang, done ? 'notify.complete' : 'notify.failed')
     const body = done ? job.title : `${job.title} — ${job.error ?? 'unknown error'}`
     try {
       new Notification({
-        title: done ? 'Download complete' : 'Download failed',
+        title,
         body: body.length > 220 ? `${body.slice(0, 217)}…` : body,
         silent: false
       }).show()
@@ -702,9 +715,19 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
+/** Splits a raw argument string into argv pieces, honoring quotes. */
+export function splitArgs(input: string): string[] {
+  const out: string[] = []
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(input)) !== null) {
+    out.push(m[1] ?? m[2] ?? m[3])
+  }
+  return out
+}
+
 /** Runs a command and returns stdout + stderr. */
-export function runCapture(cmd: string, args: string[], timeoutMs = 30000): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
+export function runCapture(cmd: string, args: string[], timeoutMs = 30000): Promise<{ stdout: string; stderr: string }> {  return new Promise((resolve, reject) => {
     let child: ChildProcess
     try {
       child = spawn(cmd, args, { windowsHide: true })

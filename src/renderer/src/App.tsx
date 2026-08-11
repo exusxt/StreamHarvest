@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Download, ListChecks, RefreshCw, Shuffle, X } from 'lucide-react'
-import type { AppStatus, BinaryProgress, DownloadJob, UpdateState, VideoMetadata } from '../../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, UpdateState, VideoMetadata } from '../../shared/types'
 import { QUALITY_PRESETS } from '../../shared/types'
 import { buildPlaylistItems } from '../../shared/playlist'
 import { extractUrls } from '../../shared/urls'
@@ -16,6 +16,8 @@ import { Header } from './components/Header'
 import { Sidebar, type ScreenId } from './components/Sidebar'
 import { Badge, Button, Panel, ProgressBar, Select, Spinner } from './components/ui'
 import { UpdateToast } from './components/UpdateToast'
+import { Onboarding } from './components/Onboarding'
+import { I18nProvider, useT } from './i18n'
 import { HomeScreen } from './screens/HomeScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
@@ -40,6 +42,7 @@ function loadTheme(): ThemeId {
 }
 
 export default function App(): React.JSX.Element {
+  const t = useT()
   const [theme, setTheme] = useState<ThemeId>(loadTheme)
   const [version, setVersion] = useState('')
   const [maximized, setMaximized] = useState(false)
@@ -60,6 +63,42 @@ export default function App(): React.JSX.Element {
   const [clips, setClips] = useState<ClipItem[]>([])
   const [dragging, setDragging] = useState(false)
   const dragDepth = useRef(0)
+
+  // Load persisted settings once and keep them in sync with SettingsScreen,
+  // which dispatches a custom event after every update.
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
+  const [hotUrl, setHotUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    void window.api.getSettings().then((s) => {
+      if (mounted) setAppSettings(s)
+    })
+    const onChanged = (e: Event): void => {
+      const detail = (e as CustomEvent<AppSettings>).detail
+      if (detail) setAppSettings(detail)
+    }
+    window.addEventListener('streamharvest:settings-changed', onChanged)
+    return () => {
+      mounted = false
+      window.removeEventListener('streamharvest:settings-changed', onChanged)
+    }
+  }, [])
+
+  // Global hotkey: bring the window forward with the copied link queued.
+  useEffect(() => {
+    const off = window.api.onHotkeyOpen((url) => {
+      setScreen('home')
+      setHotUrl(url)
+    })
+    return off
+  }, [])
+
+  const onboarded = appSettings?.onboarded ?? true
+  const completeOnboarding = (): void => {
+    void window.api.setSettings({ onboarded: true })
+    setAppSettings((prev) => (prev ? { ...prev, onboarded: true } : prev))
+  }
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -388,7 +427,14 @@ export default function App(): React.JSX.Element {
   const screenEl = useMemo(() => {
     switch (screen) {
       case 'home':
-        return <HomeScreen status={status} onGoDownloads={() => setScreen('downloads')} />
+        return (
+          <HomeScreen
+            status={status}
+            onGoDownloads={() => setScreen('downloads')}
+            hotUrl={hotUrl}
+            onHotUrlHandled={() => setHotUrl(null)}
+          />
+        )
       case 'downloads':
         return <DownloadsScreen jobs={jobs} onMove={moveJob} />
       case 'settings':
@@ -413,7 +459,8 @@ export default function App(): React.JSX.Element {
   }, [screen, jobs, status, theme, installing, installProgress, ffmpegBusy, ffmpegProgress, ffmpegError])
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden">
+    <I18nProvider value={appSettings?.language ?? 'en'}>
+      <div className="relative flex h-screen flex-col overflow-hidden">
       {isGalleryTheme(theme) && galleryBg ? (
         <>
           <img src={galleryBg} alt="" className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" />
@@ -438,28 +485,25 @@ export default function App(): React.JSX.Element {
           <div className="w-full max-w-md rounded-xl border border-sc64-border bg-sc64-panel p-6 shadow-2xl">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-sc64-warn" />
-              <h2 className="text-base font-bold text-sc64-text">yt-dlp is required</h2>
+              <h2 className="text-base font-bold text-sc64-text">{t('app.ytdlpRequired')}</h2>
             </div>
-            <p className="mt-2 text-sm text-sc64-muted">
-              StreamHarvest uses <span className="font-mono text-sc64-text">yt-dlp</span> as its download engine. It is
-              missing, so downloads are disabled until it is installed.
-            </p>
+            <p className="mt-2 text-sm text-sc64-muted">{t('app.ytdlpRequiredBody')}</p>
             {installError ? <Panel className="mt-3 border-sc64-bad/40 text-xs text-sc64-bad">{installError}</Panel> : null}
             {installProgress && installProgress.total > 0 ? (
               <div className="mt-4">
-                <ProgressBar value={installProgress.received} max={installProgress.total} label="Downloading yt-dlp…" />
+                <ProgressBar value={installProgress.received} max={installProgress.total} label={t('app.downloadingYtdlp')} />
               </div>
             ) : null}
             <div className="mt-4 flex flex-col gap-2">
               <Button variant="primary" disabled={installing} onClick={() => void installYtDlp()}>
                 {installing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {installing ? 'Installing…' : 'Download yt-dlp'}
+                {installing ? t('app.installing') : t('app.downloadYtdlp')}
               </Button>
               <Button variant="ghost" disabled={installing} onClick={() => void refreshStatus()}>
-                Check again
+                {t('app.checkAgain')}
               </Button>
               <Button variant="ghost" disabled={installing} onClick={() => setYtDlpDenied(true)}>
-                No thanks — I'll install it myself
+                {t('app.noThanks')}
               </Button>
             </div>
           </div>
@@ -478,17 +522,15 @@ export default function App(): React.JSX.Element {
                 <div className="flex min-w-0 items-start gap-3">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-sc64-warn" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-sc64-text">ffmpeg is missing</p>
+                    <p className="text-sm font-semibold text-sc64-text">{t('app.ffmpegMissing')}</p>
                     <p className="text-xs text-sc64-muted">
-                      ffmpeg is needed to merge video + audio streams and to convert formats.{' '}
-                      {isMac
-                        ? 'Install it with Homebrew (one command) to enable every quality.'
-                        : 'Download it so every quality works.'}
+                      {t('app.ffmpegMissingBody')}{' '}
+                      {isMac ? t('app.installHomebrew') : t('app.downloadFfmpegBody')}
                     </p>
                     {ffmpegError ? <p className="mt-1 text-xs text-sc64-bad">{ffmpegError}</p> : null}
                     {ffmpegProgress && ffmpegProgress.total > 0 ? (
                       <div className="mt-2 max-w-sm">
-                        <ProgressBar value={ffmpegProgress.received} max={ffmpegProgress.total} label="Downloading ffmpeg…" />
+                        <ProgressBar value={ffmpegProgress.received} max={ffmpegProgress.total} label={t('app.downloadingFfmpeg')} />
                       </div>
                     ) : null}
                   </div>
@@ -500,16 +542,16 @@ export default function App(): React.JSX.Element {
                         brew install ffmpeg
                       </code>
                       <Button variant="outline" size="sm" onClick={() => void refreshStatus()}>
-                        <RefreshCw className="h-3.5 w-3.5" /> Check again
+                        <RefreshCw className="h-3.5 w-3.5" /> {t('app.checkAgain')}
                       </Button>
                     </>
                   ) : (
                     <>
                       <Button variant="primary" size="sm" disabled={ffmpegBusy} onClick={() => void installFfmpeg()}>
                         {ffmpegBusy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        {ffmpegBusy ? 'Installing…' : 'Download ffmpeg'}
+                        {ffmpegBusy ? t('app.installing') : t('app.downloadFfmpeg')}
                       </Button>
-                      <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={() => setFfmpegBannerDismissed(true)} title="Dismiss">
+                      <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={() => setFfmpegBannerDismissed(true)} title={t('app.dismiss')}>
                         <X className="h-4 w-4" />
                       </Button>
                     </>
@@ -522,12 +564,12 @@ export default function App(): React.JSX.Element {
           <main className="flex-1">{screenEl}</main>
           <footer className="mt-6 flex items-center justify-between border-t border-sc64-border pt-4">
             <div className="truncate text-[11px] text-sc64-muted">
-              downloads → {status?.downloadsDir ?? '…'}
+              {t('app.downloadsTo', { path: status?.downloadsDir ?? '…' })}
             </div>
             <div className="flex items-center gap-2">
               {isGalleryTheme(theme) ? (
-                <Button variant="outline" size="sm" onClick={shuffleBg} title="Shuffle background">
-                  <Shuffle className="h-3.5 w-3.5" /> Shuffle
+                <Button variant="outline" size="sm" onClick={shuffleBg} title={t('app.shuffleBg')}>
+                  <Shuffle className="h-3.5 w-3.5" /> {t('app.shuffle')}
                 </Button>
               ) : null}
             </div>
@@ -545,8 +587,8 @@ export default function App(): React.JSX.Element {
         <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-black/50">
           <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-sc64-accent bg-sc64-panel/95 px-10 py-8 shadow-2xl">
             <Download className="h-8 w-8 text-sc64-accent" />
-            <p className="text-sm font-semibold text-sc64-text">Drop URLs to queue them</p>
-            <p className="text-xs text-sc64-muted">A link, a selection of links, or a .txt file full of links</p>
+            <p className="text-sm font-semibold text-sc64-text">{t('app.dropUrls')}</p>
+            <p className="text-xs text-sc64-muted">{t('app.dropUrlsHint')}</p>
           </div>
         </div>
       ) : null}
@@ -556,17 +598,17 @@ export default function App(): React.JSX.Element {
           <div className="flex max-h-[55vh] flex-col overflow-hidden rounded-xl border border-sc64-border bg-sc64-panel shadow-2xl shadow-black/50">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sc64-border px-3 py-2">
               <p className="text-xs font-semibold text-sc64-text">
-                {clips.length} link{clips.length === 1 ? '' : 's'} found in clipboard
+                {clips.length === 1 ? t('app.oneLinkFound') : t('app.linksFound', { count: clips.length })}
               </p>
               <Button variant="ghost" size="sm" onClick={clearClips}>
-                <X className="h-3.5 w-3.5" /> Clear all
+                <X className="h-3.5 w-3.5" /> {t('app.clearAll')}
               </Button>
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto p-2">
               {clips.map((item) =>
                 item.busy ? (
                   <div key={item.id} className="flex items-center gap-2 rounded-lg px-2 py-3 text-sm text-sc64-muted">
-                    <Spinner className="h-4 w-4 text-sc64-accent" /> Fetching video info…
+                    <Spinner className="h-4 w-4 text-sc64-accent" /> {t('app.fetchingInfo')}
                   </div>
                 ) : item.meta && !item.meta.error ? (
                   <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/40 p-2">
@@ -583,9 +625,9 @@ export default function App(): React.JSX.Element {
                       ) : null}
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
-                          <Badge tone="accent">{item.meta.playlist ? 'Playlist' : 'Video'}</Badge>
+                          <Badge tone="accent">{item.meta.playlist ? t('app.playlist') : t('app.video')}</Badge>
                           {item.meta.playlist && item.meta.entryCount ? (
-                            <Badge tone="default">{item.meta.entryCount} videos</Badge>
+                            <Badge tone="default">{t('app.videos', { count: item.meta.entryCount })}</Badge>
                           ) : null}
                         </div>
                         <h3 className="truncate text-sm font-semibold text-sc64-text" title={item.meta.title}>
@@ -594,7 +636,7 @@ export default function App(): React.JSX.Element {
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <div className="min-w-0 sm:w-52">
                             <Select value={item.quality} onChange={(e) => updateClip(item.id, { quality: e.target.value })} className="w-full">
-                              <optgroup label="Presets">
+                              <optgroup label={t('app.presets')}>
                                 {QUALITY_PRESETS.map((p) => (
                                   <option key={p.id} value={`preset:${p.id}`}>
                                     {p.label}
@@ -602,7 +644,7 @@ export default function App(): React.JSX.Element {
                                 ))}
                               </optgroup>
                               {item.meta.formats.length > 0 ? (
-                                <optgroup label="Specific formats (advanced)">
+                                <optgroup label={t('app.specificFormats')}>
                                   {item.meta.formats.map((f) => (
                                     <option key={f.id} value={`format:${f.id}`}>
                                       {f.label}
@@ -614,7 +656,7 @@ export default function App(): React.JSX.Element {
                           </div>
                           {item.done ? (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-sc64-good">
-                              <Download className="h-3.5 w-3.5" /> Added to queue
+                              <Download className="h-3.5 w-3.5" /> {t('app.addedToQueue')}
                             </span>
                           ) : (
                             <div className="flex items-center gap-1.5">
@@ -626,11 +668,11 @@ export default function App(): React.JSX.Element {
                               >
                                 {item.busy ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
                                 {item.meta.playlist && item.meta.entries
-                                  ? `Download ${item.selected.size} of ${item.meta.entries.length}`
-                                  : 'Download'}
+                                  ? t('app.downloadOf', { selected: item.selected.size, total: item.meta.entries.length })
+                                  : t('app.download')}
                               </Button>
                               <Button variant="ghost" size="sm" onClick={() => abortClip(item)}>
-                                Abort
+                                {t('app.abort')}
                               </Button>
                             </div>
                           )}
@@ -646,19 +688,19 @@ export default function App(): React.JSX.Element {
                           onClick={() => updateClip(item.id, { expanded: !item.expanded })}
                         >
                           <span className="inline-flex items-center gap-1.5">
-                            <ListChecks className="h-3.5 w-3.5" /> Select videos — {item.selected.size} of{' '}
-                            {item.meta.entries.length}
+                            <ListChecks className="h-3.5 w-3.5" />{' '}
+                            {t('app.selectVideos', { selected: item.selected.size, total: item.meta.entries.length })}
                           </span>
-                          <span>{item.expanded ? 'Hide' : 'Show'}</span>
+                          <span>{item.expanded ? t('app.hide') : t('app.show')}</span>
                         </button>
                         {item.expanded ? (
                           <div className="mt-2">
                             <div className="mb-1.5 flex items-center gap-2">
                               <Button variant="outline" size="sm" onClick={() => selectAllClip(item)}>
-                                <Check className="h-3 w-3" /> All
+                                <Check className="h-3 w-3" /> {t('app.all')}
                               </Button>
                               <Button variant="outline" size="sm" onClick={() => selectNoneClip(item)}>
-                                <X className="h-3 w-3" /> None
+                                <X className="h-3 w-3" /> {t('app.none')}
                               </Button>
                             </div>
                             <div className="grid max-h-44 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -695,17 +737,17 @@ export default function App(): React.JSX.Element {
                         {item.url}
                       </p>
                       <p className="mt-0.5 text-[11px] text-sc64-warn">
-                        Couldn't fetch video info — downloads with the default preset.
+                        {t('app.couldNotFetch')}
                       </p>
                       {item.error ? <p className="mt-1 text-xs text-sc64-bad">{item.error}</p> : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <Button variant="primary" size="sm" disabled={item.busy || item.done} onClick={() => void downloadClip(item)}>
                         {item.busy ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                        Download
+                        {t('app.download')}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => abortClip(item)}>
-                        Abort
+                        {t('app.abort')}
                       </Button>
                     </div>
                   </div>
@@ -715,6 +757,8 @@ export default function App(): React.JSX.Element {
           </div>
         </div>
       ) : null}
+      {!onboarded ? <Onboarding platform={status?.platform ?? 'win32'} onComplete={completeOnboarding} /> : null}
     </div>
+    </I18nProvider>
   )
 }

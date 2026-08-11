@@ -75,6 +75,11 @@ const api = {
     ipcRenderer.on('clipboard:url', listener)
     return () => ipcRenderer.removeListener('clipboard:url', listener)
   },
+  onHotkeyOpen: (cb: (url: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, url: string): void => cb(url)
+    ipcRenderer.on('hotkey:open', listener)
+    return () => ipcRenderer.removeListener('hotkey:open', listener)
+  },
   onYtDlpStatus: (cb: (status: YtDlpStatus) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, status: YtDlpStatus): void => cb(status)
     ipcRenderer.on('dl:ytdlpStatus', listener)

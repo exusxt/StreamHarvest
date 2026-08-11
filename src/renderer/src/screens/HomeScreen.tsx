@@ -8,6 +8,7 @@ import { ArrowRight, Check, Clock, Download, Folder, Link2, ListChecks, ListVide
 import type { AppStatus, VideoMetadata } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { buildPlaylistItems } from '../../../shared/playlist'
+import { useT } from '../i18n'
 import { Badge, Button, Field, Input, Panel, Select, Spinner } from '../components/ui'
 import { cn, formatDuration } from '../lib'
 
@@ -19,11 +20,17 @@ function StatusLine({ text, tone }: { text: string; tone?: 'good' | 'bad' }): Re
 
 export function HomeScreen({
   status,
-  onGoDownloads
+  onGoDownloads,
+  hotUrl,
+  onHotUrlHandled
 }: {
   status: AppStatus | null
   onGoDownloads: () => void
+  /** URL injected by the global hotkey; fetched automatically once. */
+  hotUrl?: string | null
+  onHotUrlHandled?: () => void
 }): React.JSX.Element {
+  const t = useT()
   const [url, setUrl] = useState('')
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null)
   const [fetching, setFetching] = useState(false)
@@ -59,15 +66,15 @@ export function HomeScreen({
 
   const engineReady = status?.ytDlp.present ?? false
 
-  const fetchInfo = async (): Promise<void> => {
-    const value = url.trim()
-    if (!value) return
+  const fetchInfo = async (value?: string): Promise<void> => {
+    const target = (value ?? url).trim()
+    if (!target) return
     setFetching(true)
     setFetchError(null)
     setMetadata(null)
     setStartError(null)
     try {
-      const res = await window.api.fetchMetadata(value)
+      const res = await window.api.fetchMetadata(target)
       if (res.error) {
         setFetchError(res.error)
         return
@@ -79,6 +86,16 @@ export function HomeScreen({
       setFetching(false)
     }
   }
+
+  useEffect(() => {
+    if (!hotUrl || !hotUrl.trim()) return
+    const target = hotUrl.trim()
+    setUrl(target)
+    setQuality('preset:best')
+    onHotUrlHandled?.()
+    void fetchInfo(target)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotUrl])
 
   const start = async (): Promise<void> => {
     if (!metadata) return
@@ -127,12 +144,12 @@ export function HomeScreen({
       <Panel className="p-5">
         <div className="mb-3 flex items-center gap-2">
           <Link2 className="h-5 w-5 text-sc64-accent" />
-          <h2 className="text-base font-bold text-sc64-text">New download</h2>
+          <h2 className="text-base font-bold text-sc64-text">{t('home.newDownload')}</h2>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Input
             value={url}
-            placeholder="Paste a video URL — YouTube, Vimeo, Twitch and more…"
+            placeholder={t('home.urlPlaceholder')}
             disabled={!engineReady || fetching}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => {
@@ -142,13 +159,13 @@ export function HomeScreen({
           />
           <Button variant="primary" onClick={() => void fetchInfo()} disabled={!engineReady || fetching || !url.trim()}>
             {fetching ? <Spinner className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            {fetching ? 'Fetching…' : 'Fetch info'}
+            {fetching ? t('home.fetching') : t('home.fetchInfo')}
           </Button>
         </div>
         {!engineReady ? (
-          <StatusLine text="yt-dlp is not installed yet — open Settings to install it." tone="bad" />
+          <StatusLine text={t('home.engineMissing')} tone="bad" />
         ) : (
-          <StatusLine text={`Downloads are saved to ${status?.downloadsDir ?? '…'}`} />
+          <StatusLine text={t('home.savedTo', { path: status?.downloadsDir ?? '…' })} />
         )}
         {fetchError ? <StatusLine text={fetchError} tone="bad" /> : null}
       </Panel>
@@ -168,10 +185,10 @@ export function HomeScreen({
             ) : null}
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <Badge tone="accent">{metadata.playlist ? 'Playlist / Channel' : 'Video'}</Badge>
+                <Badge tone="accent">{metadata.playlist ? t('home.playlistChannel') : t('home.video')}</Badge>
                 {metadata.playlist && metadata.entryCount ? (
                   <Badge tone="default">
-                    <ListVideo className="h-3 w-3" /> {metadata.entryCount} videos
+                    <ListVideo className="h-3 w-3" /> {t('home.videos', { count: metadata.entryCount })}
                   </Badge>
                 ) : null}
               </div>
@@ -193,9 +210,9 @@ export function HomeScreen({
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Field label="Quality / format">
+                <Field label={t('home.qualityFormat')}>
                   <Select value={quality} onChange={(e) => setQuality(e.target.value)}>
-                    <optgroup label="Presets">
+                    <optgroup label={t('home.presets')}>
                       {QUALITY_PRESETS.map((p) => (
                         <option key={p.id} value={`preset:${p.id}`}>
                           {p.label}
@@ -203,7 +220,7 @@ export function HomeScreen({
                       ))}
                     </optgroup>
                     {metadata.formats.length > 0 ? (
-                      <optgroup label="Specific formats (advanced)">
+                      <optgroup label={t('home.specificFormats')}>
                         {metadata.formats.map((f) => (
                           <option key={f.id} value={`format:${f.id}`}>
                             {f.label}
@@ -223,16 +240,16 @@ export function HomeScreen({
                   >
                     {starting ? <Spinner className="h-4 w-4" /> : <Download className="h-4 w-4" />}
                     {starting
-                      ? 'Starting…'
+                      ? t('home.starting')
                       : metadata.playlist && metadata.entries
-                        ? `Download ${selected.size} of ${metadata.entries.length}`
-                        : 'Download'}
+                        ? t('home.downloadCount', { selected: selected.size, total: metadata.entries.length })
+                        : t('home.download')}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
               {chosenPreset?.extraArgs?.length ? (
-                <p className="mt-2 text-[11px] text-sc64-muted">Conversion with ffmpeg will run after downloading.</p>
+                <p className="mt-2 text-[11px] text-sc64-muted">{t('home.ffmpegConvert')}</p>
               ) : null}
               {startError ? <p className="mt-2 text-sm text-sc64-bad">{startError}</p> : null}
             </div>
@@ -242,14 +259,15 @@ export function HomeScreen({
             <div className="mt-4 border-t border-sc64-border pt-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-                  <ListChecks className="h-3.5 w-3.5" /> Videos — {selected.size} of {metadata.entries.length} selected
+                  <ListChecks className="h-3.5 w-3.5" />{' '}
+                  {t('home.selectedCount', { selected: selected.size, total: metadata.entries.length })}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={selectAll}>
-                    <Check className="h-3.5 w-3.5" /> All
+                    <Check className="h-3.5 w-3.5" /> {t('home.all')}
                   </Button>
                   <Button variant="outline" size="sm" onClick={selectNone}>
-                    <X className="h-3.5 w-3.5" /> None
+                    <X className="h-3.5 w-3.5" /> {t('home.none')}
                   </Button>
                 </div>
               </div>
@@ -284,7 +302,7 @@ export function HomeScreen({
           {metadata.formats.length > 0 ? (
             <div className="mt-4 border-t border-sc64-border pt-4">
               <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-                <Upload className="h-3.5 w-3.5" /> Available formats
+                <Upload className="h-3.5 w-3.5" /> {t('home.availableFormats')}
               </div>
               <div className="grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
                 {metadata.formats.slice(0, 24).map((f) => (
@@ -300,14 +318,16 @@ export function HomeScreen({
                 ))}
               </div>
               {metadata.formats.length > 24 ? (
-                <p className="mt-2 text-[11px] text-sc64-muted">+{metadata.formats.length - 24} more in the dropdown above</p>
+                <p className="mt-2 text-[11px] text-sc64-muted">
+                  {t('home.moreFormats', { count: metadata.formats.length - 24 })}
+                </p>
               ) : null}
             </div>
           ) : null}
         </Panel>
       ) : fetching ? (
         <Panel className="flex items-center gap-2 text-sc64-muted">
-          <Spinner /> Fetching video info…
+          <Spinner /> {t('home.fetchingInfo')}
         </Panel>
       ) : null}
     </div>

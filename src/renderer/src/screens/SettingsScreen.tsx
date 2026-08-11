@@ -3,9 +3,11 @@
  * engine section (yt-dlp and ffmpeg install / update / check / remove).
  */
 import { useEffect, useState } from 'react'
-import { Captions, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Palette, RefreshCw, Settings2, Trash2, Wrench, Zap } from 'lucide-react'
-import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, OutputFormat, OutputLayout, YtDlpCheckResult } from '../../../shared/types'
+import { Captions, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Gauge, Globe, Palette, RefreshCw, Settings2, SlidersHorizontal, Trash2, Wrench, Zap } from 'lucide-react'
+import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, Language, OutputFormat, OutputLayout, YtDlpCheckResult } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
+import { hotkeyLabel } from '../../../shared/hotkey'
+import { useT } from '../i18n'
 import { Badge, Button, Checkbox, Field, Input, Panel, ProgressBar, Select, Spinner } from '../components/ui'
 import { cn, formatBytes, THEMES, THEME_IDS, THEME_NAMES, type ThemeId } from '../lib'
 
@@ -75,6 +77,7 @@ export function SettingsScreen({
   onUpdateFfmpeg: () => void
   onRemoveFfmpeg: () => void
 }): React.JSX.Element {
+  const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [check, setCheck] = useState<YtDlpCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
@@ -90,9 +93,14 @@ export function SettingsScreen({
     setSaved(false)
     window.api.setSettings(patch).then((next) => {
       setSettings(next)
+      dispatchSettingsChanged(next)
       setSaved(true)
       setTimeout(() => setSaved(false), 1800)
     })
+  }
+
+  const dispatchSettingsChanged = (s: AppSettings): void => {
+    window.dispatchEvent(new CustomEvent('streamharvest:settings-changed', { detail: s }))
   }
 
   const checkUpdate = async (): Promise<void> => {
@@ -123,19 +131,31 @@ export function SettingsScreen({
   return (
     <div className="max-w-2xl space-y-5">
       <h2 className="flex items-center gap-2 text-lg font-bold text-sc64-text">
-        <Settings2 className="h-5 w-5 text-sc64-accent" /> Settings
+        <Settings2 className="h-5 w-5 text-sc64-accent" /> {t('settings.title')}
       </h2>
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <Folder className="h-3.5 w-3.5" /> Download folder
+          <Globe className="h-3.5 w-3.5" /> {t('settings.general')}
+        </div>
+        <Field label={t('settings.language')}>
+          <Select value={settings?.language ?? 'en'} onChange={(e) => update({ language: e.target.value as Language })}>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </Select>
+        </Field>
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <Folder className="h-3.5 w-3.5" /> {t('settings.downloadFolder')}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={settings?.downloadsDir ?? ''}
             readOnly
             className="flex-1 font-mono text-xs"
-            placeholder="Choose a folder…"
+            placeholder={t('settings.chooseFolder')}
           />
           <div className="flex gap-2">
             <Button
@@ -146,10 +166,10 @@ export function SettingsScreen({
                 if (dir) update({ downloadsDir: dir })
               }}
             >
-              <FolderOpen className="h-3.5 w-3.5" /> Browse
+              <FolderOpen className="h-3.5 w-3.5" /> {t('settings.browse')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => void window.api.openDownloadsFolder()}>
-              Open
+              {t('settings.open')}
             </Button>
           </div>
         </div>
@@ -157,10 +177,10 @@ export function SettingsScreen({
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <Zap className="h-3.5 w-3.5" /> Downloads
+          <Zap className="h-3.5 w-3.5" /> {t('settings.downloads')}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Concurrent downloads" hint="How many files may download at once.">
+          <Field label={t('settings.concurrent')} hint={t('settings.concurrentHint')}>
             <Select
               value={settings?.concurrentLimit ?? 2}
               onChange={(e) => update({ concurrentLimit: parseInt(e.target.value, 10) })}
@@ -172,7 +192,7 @@ export function SettingsScreen({
               ))}
             </Select>
           </Field>
-          <Field label="Default format">
+          <Field label={t('settings.defaultFormat')}>
             <Select value={settings?.defaultFormat ?? 'best'} onChange={(e) => update({ defaultFormat: e.target.value })}>
               {QUALITY_PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -184,87 +204,152 @@ export function SettingsScreen({
         </div>
         <div className="mt-4">
           <Checkbox
-            label="Audio-only mode"
-            hint="Downloads audio only by default (converted to MP3 with ffmpeg)."
+            label={t('settings.audioOnly')}
+            hint={t('settings.audioOnlyHint')}
             checked={settings?.audioOnly ?? false}
             onChange={(v) => update({ audioOnly: v, defaultFormat: v ? 'audio-mp3' : 'best' })}
           />
         </div>
         <div className="mt-3">
           <Checkbox
-            label="Watch clipboard for links"
-            hint="When you copy a video link anywhere, StreamHarvest offers to download it."
+            label={t('settings.clipboard')}
+            hint={t('settings.clipboardHint')}
             checked={settings?.clipboardMonitor ?? true}
             onChange={(v) => update({ clipboardMonitor: v })}
           />
         </div>
         <div className="mt-3">
           <Checkbox
-            label="Minimize to system tray"
-            hint="Closing or minimizing keeps downloads running in the background. Use the tray icon to reopen."
+            label={t('settings.tray')}
+            hint={t('settings.trayHint')}
             checked={settings?.minimizeToTray ?? false}
             onChange={(v) => update({ minimizeToTray: v })}
           />
         </div>
         <div className="mt-3">
           <Checkbox
-            label="Desktop notifications"
-            hint="Show a system notification when a download completes or fails."
+            label={t('settings.notifications')}
+            hint={t('settings.notificationsHint')}
             checked={settings?.notifications ?? true}
             onChange={(v) => update({ notifications: v })}
           />
         </div>
-        {saved ? <p className="mt-3 text-xs text-sc64-good">Settings saved.</p> : null}
+        <div className="mt-3">
+          <Field label={t('settings.speedLimit')} hint={t('settings.speedLimitHint')}>
+            <Select
+              value={settings?.speedLimit ?? ''}
+              onChange={(e) => update({ speedLimit: e.target.value })}
+            >
+              <option value="">{t('settings.noLimit')}</option>
+              <option value="100K">100 K</option>
+              <option value="500K">500 K</option>
+              <option value="1M">1 MB</option>
+              <option value="2M">2 MB</option>
+              <option value="5M">5 MB</option>
+              <option value="10M">10 MB</option>
+            </Select>
+          </Field>
+        </div>
+        {saved ? <p className="mt-3 text-xs text-sc64-good">{t('settings.saved')}</p> : null}
       </Panel>
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <Clapperboard className="h-3.5 w-3.5" /> Media quality
+          <Gauge className="h-3.5 w-3.5" /> {t('settings.network')}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Output format" hint="Convert the container after downloading (needs ffmpeg).">
+          <Field label={t('settings.proxy')} hint={t('settings.proxyHint')}>
+            <Input
+              value={settings?.proxy ?? ''}
+              onChange={(e) => update({ proxy: e.target.value })}
+              placeholder="http://user:pass@host:port"
+              className="font-mono text-xs"
+            />
+          </Field>
+          <div className="flex items-end pb-1">
+            <Checkbox
+              label={`${t('settings.hotkey')} (${hotkeyLabel(status?.platform ?? 'win32')})`}
+              hint={t('settings.hotkeyHint')}
+              checked={settings?.globalHotkey ?? true}
+              onChange={(v) => update({ globalHotkey: v })}
+            />
+          </div>
+        </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <SlidersHorizontal className="h-3.5 w-3.5" /> {t('settings.advanced')}
+        </div>
+        <Checkbox
+          label={t('settings.advancedMode')}
+          hint={t('settings.advancedModeHint')}
+          checked={settings?.advancedMode ?? false}
+          onChange={(v) => update({ advancedMode: v })}
+        />
+        {settings?.advancedMode ? (
+          <div className="mt-3">
+            <Field label={t('settings.extraArgs')} hint={t('settings.extraArgsHint')}>
+              <textarea
+                value={settings?.extraArgs ?? ''}
+                onChange={(e) => update({ extraArgs: e.target.value })}
+                rows={3}
+                placeholder="--recode-video mp4 --retries 3"
+                className="w-full resize-y rounded-lg border border-sc64-borderlight bg-sc64-panel2 px-3 py-2 font-mono text-xs text-sc64-text outline-none placeholder:text-sc64-muted/60 focus:border-sc64-accent focus:ring-1 focus:ring-sc64-accent/40"
+              />
+            </Field>
+          </div>
+        ) : null}
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <Clapperboard className="h-3.5 w-3.5" /> {t('settings.mediaQuality')}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t('settings.outputFormat')} hint={t('settings.outputFormatHint')}>
             <Select
               value={settings?.outputFormat ?? 'original'}
               onChange={(e) => update({ outputFormat: e.target.value as OutputFormat })}
             >
-              <option value="original">Keep original</option>
+              <option value="original">{t('settings.keepOriginal')}</option>
               <option value="mp4">MP4</option>
               <option value="mkv">MKV</option>
               <option value="webm">WebM</option>
             </Select>
           </Field>
-          <Field label="Folder layout" hint="How finished files are organized in the download folder.">
+          <Field label={t('settings.folderLayout')} hint={t('settings.folderLayoutHint')}>
             <Select
               value={settings?.outputLayout ?? 'flat'}
               onChange={(e) => update({ outputLayout: e.target.value as OutputLayout })}
             >
-              <option value="flat">One flat folder</option>
-              <option value="site">By site (YouTube, Vimeo, …)</option>
-              <option value="date">By date</option>
-              <option value="playlist">By playlist</option>
+              <option value="flat">{t('settings.flatFolder')}</option>
+              <option value="site">{t('settings.bySite')}</option>
+              <option value="date">{t('settings.byDate')}</option>
+              <option value="playlist">{t('settings.byPlaylist')}</option>
             </Select>
           </Field>
         </div>
         <div className="mt-4">
           <Checkbox
-            label="Embed metadata"
-            hint="Write the title, uploader and description into the file itself."
+            label={t('settings.embedMetadata')}
+            hint={t('settings.embedMetadataHint')}
             checked={settings?.embedMetadata ?? true}
             onChange={(v) => update({ embedMetadata: v })}
           />
         </div>
         <div className="mt-3">
           <Checkbox
-            label="Embed thumbnail"
-            hint="Store the video thumbnail inside the file."
+            label={t('settings.embedThumbnail')}
+            hint={t('settings.embedThumbnailHint')}
             checked={settings?.embedThumbnail ?? true}
             onChange={(v) => update({ embedThumbnail: v })}
           />
         </div>
         <div className="mt-3">
           <Checkbox
-            label="Download subtitles"
-            hint="Fetch subtitle tracks for the languages below."
+            label={t('settings.downloadSubtitles')}
+            hint={t('settings.downloadSubtitlesHint')}
             checked={settings?.subtitles ?? false}
             onChange={(v) => update({ subtitles: v })}
           />
@@ -272,7 +357,7 @@ export function SettingsScreen({
         {settings?.subtitles ? (
           <>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <Field label="Subtitle languages" hint="Comma-separated codes, e.g. en,de,es">
+              <Field label={t('settings.subtitleLangs')} hint={t('settings.subtitleLangsHint')}>
                 <Input
                   value={settings?.subtitleLangs ?? 'en'}
                   onChange={(e) => update({ subtitleLangs: e.target.value })}
@@ -281,15 +366,15 @@ export function SettingsScreen({
               </Field>
               <div className="flex items-end pb-1">
                 <Checkbox
-                  label="Embed subtitles"
-                  hint="Mux the subtitles into the video file."
+                  label={t('settings.embedSubtitles')}
+                  hint={t('settings.embedSubtitlesHint')}
                   checked={settings?.embedSubtitles ?? false}
                   onChange={(v) => update({ embedSubtitles: v })}
                 />
               </div>
             </div>
             <p className="mt-2 flex items-center gap-1.5 text-[11px] text-sc64-muted">
-              <Captions className="h-3 w-3" /> Only tracks the site provides for the selected languages will be saved.
+              <Captions className="h-3 w-3" /> {t('settings.subtitleNote')}
             </p>
           </>
         ) : null}
@@ -297,9 +382,9 @@ export function SettingsScreen({
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <Palette className="h-3.5 w-3.5" /> Theme
+          <Palette className="h-3.5 w-3.5" /> {t('settings.theme')}
         </div>
-        <p className="mb-3 text-xs text-sc64-muted">Pick a look for the whole app. Gallery themes use a random photo background.</p>
+        <p className="mb-3 text-xs text-sc64-muted">{t('settings.themeHint')}</p>
         <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5">
           {THEME_IDS.map((id) => (
             <ThemeCard key={id} id={id} active={theme === id} onSelect={onThemeChange} />
@@ -309,7 +394,7 @@ export function SettingsScreen({
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <Wrench className="h-3.5 w-3.5" /> Download engine
+          <Wrench className="h-3.5 w-3.5" /> {t('settings.engine')}
         </div>
 
         <div className="space-y-5">
@@ -320,7 +405,7 @@ export function SettingsScreen({
                   <CheckCircle2 className="h-3 w-3" /> yt-dlp {yd.version}
                 </Badge>
               ) : (
-                <Badge tone="bad">yt-dlp not installed</Badge>
+                <Badge tone="bad">{t('settings.ytdlpNotInstalled')}</Badge>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -328,24 +413,24 @@ export function SettingsScreen({
                 <>
                   <Button variant="outline" size="sm" disabled={engineBusy} onClick={onUpdate}>
                     {engineBusy ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Update yt-dlp
+                    {t('settings.updateYtdlp')}
                   </Button>
                   <Button variant="ghost" size="sm" disabled={engineBusy || checking} onClick={() => void checkUpdate()}>
                     {checking ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Check for updates
+                    {t('settings.checkUpdates')}
                   </Button>
                 </>
               ) : (
                 <Button variant="primary" size="sm" disabled={engineBusy} onClick={onInstall}>
                   {engineBusy ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Install yt-dlp
+                  {t('settings.installYtdlp')}
                 </Button>
               )}
             </div>
 
             {installProgress && installProgress.total > 0 ? (
               <div className="mt-3">
-                <ProgressBar value={installProgress.received} max={installProgress.total} label="Downloading yt-dlp…" />
+                <ProgressBar value={installProgress.received} max={installProgress.total} label={t('settings.downloadingYtdlp')} />
                 <p className="mt-1 text-[11px] text-sc64-muted">
                   {formatBytes(installProgress.received)} / {formatBytes(installProgress.total)}
                 </p>
@@ -356,10 +441,10 @@ export function SettingsScreen({
               check.error ? (
                 <p className="mt-3 text-sm text-sc64-bad">{check.error}</p>
               ) : check.upToDate ? (
-                <p className="mt-3 text-sm text-sc64-good">yt-dlp is up to date ({check.latest}).</p>
+                <p className="mt-3 text-sm text-sc64-good">{t('settings.ytdlpUpToDate', { version: check.latest ?? '' })}</p>
               ) : (
                 <p className="mt-3 text-sm text-sc64-warn">
-                  A newer version is available: {check.latest}. Use “Update yt-dlp” above.
+                  {t('settings.ytdlpNewVersion', { version: check.latest ?? '' })}
                 </p>
               )
             ) : null}
@@ -370,10 +455,10 @@ export function SettingsScreen({
               {ff?.present ? (
                 <Badge tone="good">
                   <CheckCircle2 className="h-3 w-3" /> ffmpeg {ff.version}
-                  {ff.source === 'managed' ? ' (managed)' : ' (system)'}
+                  {ff.source === 'managed' ? ` (${t('settings.ffmpegManaged')})` : ` (${t('settings.ffmpegSystem')})`}
                 </Badge>
               ) : (
-                <Badge tone="warn">ffmpeg not found — merging & conversion need it</Badge>
+                <Badge tone="warn">{t('settings.ffmpegNotFound')}</Badge>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -381,15 +466,15 @@ export function SettingsScreen({
                 <>
                   <Button variant="outline" size="sm" disabled={ffmpegBusy} onClick={onUpdateFfmpeg}>
                     {ffmpegBusy ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Update ffmpeg
+                    {t('settings.updateFfmpeg')}
                   </Button>
                   <Button variant="ghost" size="sm" disabled={ffmpegBusy || checkingFfmpeg} onClick={() => void checkFfmpegUpdate()}>
                     {checkingFfmpeg ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Check for updates
+                    {t('settings.checkUpdates')}
                   </Button>
                   {ff.source === 'managed' ? (
-                    <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={onRemoveFfmpeg} title="Remove the managed copy">
-                      <Trash2 className="h-3.5 w-3.5" /> Remove
+                    <Button variant="ghost" size="sm" disabled={ffmpegBusy} onClick={onRemoveFfmpeg} title={t('settings.removeManaged')}>
+                      <Trash2 className="h-3.5 w-3.5" /> {t('settings.remove')}
                     </Button>
                   ) : null}
                 </>
@@ -398,19 +483,19 @@ export function SettingsScreen({
                   <code className="rounded-md border border-sc64-border bg-sc64-panel px-2 py-1 font-mono text-xs text-sc64-text">
                     brew install ffmpeg
                   </code>
-                  <span className="text-xs text-sc64-muted">then reopen Settings to detect it</span>
+                  <span className="text-xs text-sc64-muted">{t('app.checkAgain')}</span>
                 </div>
               ) : (
                 <Button variant="primary" size="sm" disabled={ffmpegBusy} onClick={onInstallFfmpeg}>
                   {ffmpegBusy ? <Spinner className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
-                  Install ffmpeg
+                  {t('settings.installFfmpeg')}
                 </Button>
               )}
             </div>
 
             {ffmpegProgress && ffmpegProgress.total > 0 ? (
               <div className="mt-3">
-                <ProgressBar value={ffmpegProgress.received} max={ffmpegProgress.total} label="Downloading ffmpeg…" />
+                <ProgressBar value={ffmpegProgress.received} max={ffmpegProgress.total} label={t('settings.downloadingFfmpeg')} />
                 <p className="mt-1 text-[11px] text-sc64-muted">
                   {formatBytes(ffmpegProgress.received)} / {formatBytes(ffmpegProgress.total)}
                 </p>
@@ -423,10 +508,10 @@ export function SettingsScreen({
               ffmpegCheck.error ? (
                 <p className="mt-3 text-sm text-sc64-bad">{ffmpegCheck.error}</p>
               ) : ffmpegCheck.upToDate ? (
-                <p className="mt-3 text-sm text-sc64-good">ffmpeg is up to date ({ffmpegCheck.latest}).</p>
+                <p className="mt-3 text-sm text-sc64-good">{t('settings.ffmpegUpToDate', { version: ffmpegCheck.latest ?? '' })}</p>
               ) : (
                 <p className="mt-3 text-sm text-sc64-warn">
-                  A newer build is available: {ffmpegCheck.latest}. Use “Update ffmpeg” above.
+                  {t('settings.ffmpegNewVersion', { version: ffmpegCheck.latest ?? '' })}
                 </p>
               )
             ) : null}
@@ -436,13 +521,11 @@ export function SettingsScreen({
 
       <Panel>
         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
-          <RefreshCw className="h-3.5 w-3.5" /> App updates
+          <RefreshCw className="h-3.5 w-3.5" /> {t('settings.appUpdates')}
         </div>
-        <p className="mb-3 text-xs text-sc64-muted">
-          StreamHarvest checks for updates on startup. Use the button below to check again right now.
-        </p>
+        <p className="mb-3 text-xs text-sc64-muted">{t('settings.appUpdatesHint')}</p>
         <Button variant="outline" size="sm" onClick={() => void window.api.checkForUpdates()}>
-          <RefreshCw className="h-3.5 w-3.5" /> Check for app updates
+          <RefreshCw className="h-3.5 w-3.5" /> {t('settings.checkAppUpdates')}
         </Button>
       </Panel>
     </div>

@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ThemeId } from '../lib'
 import { THEME_IDS, THEME_NAMES, cn } from '../lib'
+import { useT } from '../i18n'
 import appIcon from '../assets/app-icon.png'
 
 interface MenuProps {
@@ -93,6 +94,7 @@ export function TitleBar({
   onToggleMaximize: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const t = useT()
   return (
     <header
       className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-sc64-border bg-sc64-panel2/70 pl-3 pr-1"
@@ -105,7 +107,7 @@ export function TitleBar({
       </div>
 
       <div className="flex items-center gap-0.5">
-        <Menu label="Theme">
+        <Menu label={t('titlebar.theme')}>
           {THEME_IDS.map((id) => (
             <MenuItem key={id} active={theme === id} onClick={() => onThemeChange(id)}>
               {THEME_NAMES[id]}
@@ -119,7 +121,7 @@ export function TitleBar({
       <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
           type="button"
-          title="Minimize"
+          title={t('titlebar.minimize')}
           onClick={onMinimize}
           className="flex h-8 w-11 items-center justify-center rounded-md text-sc64-muted transition-colors hover:bg-sc64-panel hover:text-sc64-text"
         >
@@ -129,7 +131,7 @@ export function TitleBar({
         </button>
         <button
           type="button"
-          title={maximized ? 'Restore' : 'Maximize'}
+          title={maximized ? t('titlebar.restore') : t('titlebar.maximize')}
           onClick={onToggleMaximize}
           className="flex h-8 w-11 items-center justify-center rounded-md text-sc64-muted transition-colors hover:bg-sc64-panel hover:text-sc64-text"
         >
@@ -146,7 +148,7 @@ export function TitleBar({
         </button>
         <button
           type="button"
-          title="Close"
+          title={t('titlebar.close')}
           onClick={onClose}
           className="ml-1 flex h-8 w-11 items-center justify-center rounded-md text-sc64-muted transition-colors hover:bg-sc64-bad hover:text-white"
         >

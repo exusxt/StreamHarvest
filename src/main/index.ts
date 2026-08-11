@@ -7,9 +7,11 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { AppStatus, FfmpegCheckResult, YtDlpCheckResult } from '../shared/types'
 import { extractUrls } from '../shared/urls'
+import { translate } from '../shared/i18n'
 import { DownloadManager } from './downloads'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
+import { HotkeyController } from './hotkey'
 import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
 import { downloadYtDlp, latestReleaseTag, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
@@ -19,6 +21,7 @@ let mainWindow: BrowserWindow | null = null
 let manager: DownloadManager | null = null
 let clipboardMonitor: ClipboardMonitor | null = null
 let trayController: TrayController | null = null
+let hotkeyController: HotkeyController | null = null
 let quitting = false
 
 function registerIpc(): void {
@@ -80,10 +83,11 @@ function registerIpc(): void {
     return manager?.startMany(clean, preset) ?? []
   })
   ipcMain.handle('dl:chooseUrlFile', async (): Promise<string[]> => {
+    const lang = getSettings().language
     const options: Electron.OpenDialogOptions = {
-      title: 'Import URLs from text file',
+      title: translate(lang, 'dialog.importUrls'),
       properties: ['openFile'],
-      filters: [{ name: 'Text files', extensions: ['txt', 'text'] }]
+      filters: [{ name: translate(lang, 'dialog.textFiles'), extensions: ['txt', 'text'] }]
     }
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return []
@@ -103,12 +107,14 @@ function registerIpc(): void {
   ipcMain.handle('settings:set', async (_e, patch) => {
     const next = await setSettings(patch ?? {})
     trayController?.sync()
+    hotkeyController?.sync()
     return next
   })
   ipcMain.handle('settings:chooseDownloadsDir', async (): Promise<string | null> => {
+    const lang = getSettings().language
     const options: Electron.OpenDialogOptions = {
-      title: 'Choose download folder',
-      buttonLabel: 'Use this folder',
+      title: translate(lang, 'dialog.chooseFolder'),
+      buttonLabel: translate(lang, 'dialog.useFolder'),
       properties: ['openDirectory', 'createDirectory']
     }
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
@@ -129,7 +135,9 @@ function registerIpc(): void {
       )
       const version = await ytDlpVersion(bin)
       send('dl:ytdlpStatus', { present: true, version, busy: false, message: null })
-      return { ok: true, message: version ? `yt-dlp ${version} installed` : 'yt-dlp installed', version }
+      const lang = getSettings().language
+      const message = version ? translate(lang, 'engine.ytdlpInstalled', { version }) : translate(lang, 'engine.ytdlpInstalledPlain')
+      return { ok: true, message, version }
     } catch (e) {
       send('dl:ytdlpStatus', { present: ytDlpPath() !== null, version: null, busy: false, message: e instanceof Error ? e.message : String(e) })
       return { ok: false, message: e instanceof Error ? e.message : String(e), version: null }
@@ -147,7 +155,9 @@ function registerIpc(): void {
       )
       const version = await ytDlpVersion(bin)
       send('dl:ytdlpStatus', { present: true, version, busy: false, message: null })
-      return { ok: true, message: version ? `yt-dlp updated to ${version}` : 'yt-dlp updated', version }
+      const lang = getSettings().language
+      const message = version ? translate(lang, 'engine.ytdlpUpdated', { version }) : translate(lang, 'engine.ytdlpUpdatedPlain')
+      return { ok: true, message, version }
     } catch (e) {
       send('dl:ytdlpStatus', { present: ytDlpPath() !== null, version: null, busy: false, message: e instanceof Error ? e.message : String(e) })
       return { ok: false, message: e instanceof Error ? e.message : String(e), version: null }
@@ -178,7 +188,9 @@ function registerIpc(): void {
       )
       const status = await ffmpegStatus()
       sendFfmpegOp('dl:ffmpegStatus', { ...status, busy: false, message: null })
-      return { ok: true, message: status.version ? `ffmpeg ${status.version} installed` : 'ffmpeg installed', version: status.version }
+      const lang = getSettings().language
+      const message = status.version ? translate(lang, 'engine.ffmpegInstalled', { version: status.version }) : translate(lang, 'engine.ffmpegInstalledPlain')
+      return { ok: true, message, version: status.version }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       sendFfmpegOp('dl:ffmpegStatus', { present: ffmpegPath() !== null, version: null, source: null, busy: false, message: msg })
@@ -198,7 +210,9 @@ function registerIpc(): void {
       await removeFfmpeg()
       const status = await ffmpegStatus()
       sendFfmpegOp('dl:ffmpegStatus', { ...status, busy: false, message: null })
-      return { ok: true, message: status.present ? 'Removed managed ffmpeg (using system ffmpeg).' : 'Removed managed ffmpeg.', version: status.version }
+      const lang = getSettings().language
+      const message = status.present ? translate(lang, 'engine.ffmpegRemovedSystem') : translate(lang, 'engine.ffmpegRemoved')
+      return { ok: true, message, version: status.version }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       return { ok: false, message: msg, version: null }
@@ -294,6 +308,8 @@ app.whenReady().then(async () => {
     app.quit()
   })
   trayController.sync()
+  hotkeyController = new HotkeyController(getSettings, () => mainWindow)
+  hotkeyController.sync()
   registerIpc()
   createWindow()
   initUpdater(mainWindow!)
@@ -308,6 +324,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   quitting = true
+  hotkeyController?.unregister()
 })
 
 app.on('window-all-closed', () => {
