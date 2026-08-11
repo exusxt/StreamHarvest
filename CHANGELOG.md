@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v0.1.3] - 2026-08-11
 
+### Added
+
+- Automatic app updates: check on startup, toast with download progress, and one-click restart to install (electron-updater for installers, self-update for portable builds)
+
 [Compare v0.1.2...v0.1.3](https://github.com/exusxt/StreamHarvest/compare/v0.1.2...v0.1.3)
 
 ## [v0.1.2] - 2026-08-11

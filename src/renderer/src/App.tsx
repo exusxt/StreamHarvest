@@ -5,13 +5,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Download, RefreshCw, Shuffle, X } from 'lucide-react'
-import type { AppStatus, BinaryProgress, DownloadJob } from '../../shared/types'
+import type { AppStatus, BinaryProgress, DownloadJob, UpdateState } from '../../shared/types'
 import { applyTheme, isGalleryTheme, THEMES, type ThemeId } from './lib'
 import { BACKGROUNDS } from './backgrounds'
 import { TitleBar } from './components/TitleBar'
 import { Header } from './components/Header'
 import { Sidebar, type ScreenId } from './components/Sidebar'
 import { Button, Panel, ProgressBar } from './components/ui'
+import { UpdateToast } from './components/UpdateToast'
 import { HomeScreen } from './screens/HomeScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
@@ -40,6 +41,7 @@ export default function App(): React.JSX.Element {
   const [ffmpegProgress, setFfmpegProgress] = useState<BinaryProgress | null>(null)
   const [ffmpegError, setFfmpegError] = useState<string | null>(null)
   const [ffmpegBannerDismissed, setFfmpegBannerDismissed] = useState(false)
+  const [update, setUpdate] = useState<UpdateState | null>(null)
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -79,12 +81,14 @@ export default function App(): React.JSX.Element {
       setStatus((prev) => (prev ? { ...prev, ffmpeg: ff } : prev))
     })
     const offFfmpegProgress = window.api.onFfmpegProgress(setFfmpegProgress)
+    const offUpdate = window.api.onUpdateEvent(setUpdate)
     return () => {
       offJob()
       offYt()
       offProgress()
       offFfmpegStatus()
       offFfmpegProgress()
+      offUpdate()
     }
   }, [])
 
@@ -342,6 +346,12 @@ export default function App(): React.JSX.Element {
           </footer>
         </div>
       </div>
+
+      {update && update.state !== 'not-available' ? (
+        <div className="pointer-events-none absolute bottom-4 right-4 z-50">
+          <UpdateToast state={update} onDismiss={() => setUpdate(null)} />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { DownloadManager } from './downloads'
 import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
 import { downloadYtDlp, latestReleaseTag, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
+import { checkForUpdates, initUpdater, installUpdate } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let manager: DownloadManager | null = null
@@ -164,6 +165,10 @@ function registerIpc(): void {
 
   ipcMain.handle('ffmpeg:checkUpdate', async (): Promise<FfmpegCheckResult> => checkFfmpegUpdate())
 
+  // App auto-updates (electron-updater for installers, portable self-update).
+  ipcMain.handle('updates:check', () => checkForUpdates())
+  ipcMain.handle('updates:install', () => installUpdate())
+
   // Frameless-window controls.
   ipcMain.handle('win:minimize', () => mainWindow?.minimize())
   ipcMain.handle('win:toggleMaximize', () => {
@@ -226,6 +231,11 @@ app.whenReady().then(async () => {
   })
   registerIpc()
   createWindow()
+  initUpdater(mainWindow!)
+  // Check for app updates on startup (packaged only), after the window settles.
+  if (app.isPackaged) {
+    setTimeout(() => checkForUpdates(), 3000)
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

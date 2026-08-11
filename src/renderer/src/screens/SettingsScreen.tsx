@@ -278,6 +278,18 @@ export function SettingsScreen({
           </div>
         </div>
       </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <RefreshCw className="h-3.5 w-3.5" /> App updates
+        </div>
+        <p className="mb-3 text-xs text-sc64-muted">
+          StreamHarvest checks for updates on startup. Use the button below to check again right now.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void window.api.checkForUpdates()}>
+          <RefreshCw className="h-3.5 w-3.5" /> Check for app updates
+        </Button>
+      </Panel>
     </div>
   )
 }

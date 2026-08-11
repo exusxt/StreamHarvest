@@ -157,3 +157,15 @@ export interface BinaryProgress {
   received: number
   total: number
 }
+
+/**
+ * One snapshot of the auto-update flow (checking, available, downloading,
+ * downloaded, error, not-available). Pushed from main over 'update:event';
+ * percent tracks download progress while downloading.
+ */
+export type UpdateState = {
+  state: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  version?: string
+  percent?: number
+  message?: string
+}

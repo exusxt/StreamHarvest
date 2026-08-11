@@ -129,10 +129,10 @@ export function Spinner({ className }: { className?: string }): React.JSX.Elemen
  * Labeled progress bar. Shows a percentage when max > 0, otherwise an animated
  * indeterminate track via the indeterminate flag.
  */
-export function ProgressBar({ value, max, label, indeterminate }: { value: number; max: number; label?: string; indeterminate?: boolean }): React.JSX.Element {
+export function ProgressBar({ value, max, label, indeterminate, className }: { value: number; max: number; label?: string; indeterminate?: boolean; className?: string }): React.JSX.Element {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
   return (
-    <div className="w-full">
+    <div className={cn('w-full', className)}>
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="font-mono text-sc64-muted">{label}</span>
         {max > 0 ? <span className="font-mono text-sc64-muted">{Math.round(pct)}%</span> : null}

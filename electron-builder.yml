@@ -18,7 +18,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   artifactName: StreamHarvest-Setup-${version}.${ext}
 portable:
-  artifactName: StreamHarvest-${version}.${ext}
+  artifactName: StreamHarvest-${version}-${arch}.${ext}
 mac:
   icon: build/icon.png
   target:

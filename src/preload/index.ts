@@ -3,7 +3,7 @@
 // method is a thin ipcRenderer.invoke/send wrapper over the main-process IPC.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
 
 const api = {
   // App / engine status.
@@ -37,6 +37,15 @@ const api = {
   updateFfmpeg: (): Promise<FfmpegOpResult> => ipcRenderer.invoke('ffmpeg:update'),
   removeFfmpeg: (): Promise<FfmpegOpResult> => ipcRenderer.invoke('ffmpeg:remove'),
   checkFfmpegUpdate: (): Promise<FfmpegCheckResult> => ipcRenderer.invoke('ffmpeg:checkUpdate'),
+
+  // App auto-updates.
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke('updates:check'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('updates:install'),
+  onUpdateEvent: (cb: (state: UpdateState) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, state: UpdateState): void => cb(state)
+    ipcRenderer.on('update:event', listener)
+    return () => ipcRenderer.removeListener('update:event', listener)
+  },
 
   // Frameless-window controls.
   windowMinimize: (): Promise<void> => ipcRenderer.invoke('win:minimize'),
