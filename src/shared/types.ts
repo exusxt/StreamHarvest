@@ -108,6 +108,12 @@ export interface AppSettings {
   defaultFormat: string
   concurrentLimit: number
   audioOnly: boolean
+  /** Watch the clipboard and offer to add detected video links. */
+  clipboardMonitor: boolean
+  /** Hide to the system tray instead of closing/minimizing. */
+  minimizeToTray: boolean
+  /** Show OS notifications when downloads finish or fail. */
+  notifications: boolean
 }
 
 /** Result of an install/update operation on the yt-dlp binary. */

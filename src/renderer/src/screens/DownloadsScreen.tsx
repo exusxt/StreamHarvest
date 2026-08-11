@@ -4,12 +4,30 @@
  * downloads with re-download and reveal-in-folder actions.
  */
 import { useState } from 'react'
-import { FolderOpen, History, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FolderOpen, History, ListPlus, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
 import type { DownloadJob } from '../../../shared/types'
 import { Badge, Button, Panel, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib'
 
 const ACTIVE = new Set(['queued', 'fetching', 'downloading', 'paused'])
+const URL_RE = /https?:\/\/[^\s<>"']+/g
+
+function extractUrls(text: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    for (const m of line.matchAll(URL_RE)) {
+      const url = m[0].replace(/[)\]}>]+$/, '')
+      if (!seen.has(url)) {
+        seen.add(url)
+        out.push(url)
+      }
+    }
+  }
+  return out
+}
 
 function fileName(p: string): string {
   return p.split(/[\\/]/).pop() ?? p
@@ -31,7 +49,19 @@ function statusTone(job: DownloadJob): 'accent' | 'good' | 'warn' | 'bad' | 'def
   }
 }
 
-function JobRow({ job, onRestart }: { job: DownloadJob; onRestart: (job: DownloadJob) => void }): React.JSX.Element {
+function JobRow({
+  job,
+  first,
+  last,
+  onMove,
+  onRestart
+}: {
+  job: DownloadJob
+  first: boolean
+  last: boolean
+  onMove: (job: DownloadJob, direction: -1 | 1) => void
+  onRestart: (job: DownloadJob) => void
+}): React.JSX.Element {
   const active = ACTIVE.has(job.status)
   const showProgress = job.status === 'downloading' || job.status === 'paused'
 
@@ -95,9 +125,17 @@ function JobRow({ job, onRestart }: { job: DownloadJob; onRestart: (job: Downloa
                 </Button>
               </>
             ) : job.status === 'queued' ? (
-              <Button variant="danger" size="sm" onClick={() => void window.api.cancelDownload(job.id)}>
-                <X className="h-3.5 w-3.5" /> Remove from queue
-              </Button>
+              <>
+                <Button variant="outline" size="sm" disabled={first} onClick={() => onMove(job, -1)} title="Move up in queue">
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="sm" disabled={last} onClick={() => onMove(job, 1)} title="Move down in queue">
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => void window.api.cancelDownload(job.id)}>
+                  <X className="h-3.5 w-3.5" /> Remove from queue
+                </Button>
+              </>
             ) : null}
 
             {job.status === 'completed' && job.filePath ? (
@@ -118,11 +156,21 @@ function JobRow({ job, onRestart }: { job: DownloadJob; onRestart: (job: Downloa
   )
 }
 
-export function DownloadsScreen({ jobs }: { jobs: DownloadJob[] }): React.JSX.Element {
+export function DownloadsScreen({
+  jobs,
+  onMove
+}: {
+  jobs: DownloadJob[]
+  onMove: (id: string, direction: -1 | 1) => void
+}): React.JSX.Element {
   const [restarting, setRestarting] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [importing, setImporting] = useState(false)
 
   const activeJobs = jobs.filter((j) => ACTIVE.has(j.status))
   const history = jobs.filter((j) => !ACTIVE.has(j.status))
+  const queuedIds = activeJobs.filter((j) => j.status === 'queued').map((j) => j.id)
 
   const restart = async (job: DownloadJob): Promise<void> => {
     setRestarting(job.id)
@@ -142,23 +190,95 @@ export function DownloadsScreen({ jobs }: { jobs: DownloadJob[] }): React.JSX.El
     }
   }
 
+  const addFromText = async (): Promise<void> => {
+    const urls = extractUrls(bulkText)
+    if (urls.length === 0) return
+    setImporting(true)
+    try {
+      await window.api.addUrls(urls)
+      setBulkText('')
+      setImportOpen(false)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const addFromFile = async (): Promise<void> => {
+    setImporting(true)
+    try {
+      const urls = await window.api.chooseUrlFile()
+      if (urls.length > 0) await window.api.addUrls(urls)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold text-sc64-text">
           <History className="h-5 w-5 text-sc64-accent" /> Downloads
         </h2>
-        {history.length > 0 ? (
-          <Button variant="ghost" size="sm" onClick={() => void window.api.clearHistory()}>
-            <Trash2 className="h-3.5 w-3.5" /> Clear history
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setImportOpen((o) => !o)}>
+            <ListPlus className="h-3.5 w-3.5" /> Add URLs
           </Button>
-        ) : null}
+          {history.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => void window.api.clearHistory()}>
+              <Trash2 className="h-3.5 w-3.5" /> Clear history
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {importOpen ? (
+        <Panel>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-sc64-text">Batch add</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={importing} onClick={() => void addFromFile()}>
+                <FolderOpen className="h-3.5 w-3.5" /> Import .txt
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setImportOpen(false)} title="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={'Paste links, one per line:\nhttps://…\nhttps://…'}
+            rows={4}
+            className="w-full resize-y rounded-md border border-sc64-border bg-sc64-panel2 px-3 py-2 font-mono text-xs text-sc64-text outline-none placeholder:text-sc64-muted focus:border-sc64-accent"
+          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-sc64-muted">
+              {importing ? (
+                <>
+                  <Spinner className="mr-1 inline h-3 w-3" /> Adding…
+                </>
+              ) : (
+                `${extractUrls(bulkText).length} link(s) detected`
+              )}
+            </p>
+            <Button variant="primary" size="sm" disabled={importing || extractUrls(bulkText).length === 0} onClick={() => void addFromText()}>
+              <ListPlus className="h-3.5 w-3.5" /> Add to queue
+            </Button>
+          </div>
+        </Panel>
+      ) : null}
 
       {activeJobs.length > 0 ? (
         <div className="space-y-3">
           {activeJobs.map((job) => (
-            <JobRow key={job.id} job={job} onRestart={(j) => void restart(j)} />
+            <JobRow
+              key={job.id}
+              job={job}
+              first={job.status === 'queued' && queuedIds.indexOf(job.id) === 0}
+              last={job.status === 'queued' && queuedIds.indexOf(job.id) === queuedIds.length - 1}
+              onMove={(j, dir) => onMove(j.id, dir)}
+              onRestart={(j) => void restart(j)}
+            />
           ))}
         </div>
       ) : null}
@@ -168,7 +288,14 @@ export function DownloadsScreen({ jobs }: { jobs: DownloadJob[] }): React.JSX.El
           <h3 className="text-xs font-semibold uppercase tracking-wider text-sc64-muted">History</h3>
           <div className="space-y-3">
             {history.map((job) => (
-              <JobRow key={job.id} job={job} onRestart={(j) => void restart(j)} />
+              <JobRow
+                key={job.id}
+                job={job}
+                first
+                last
+                onMove={() => undefined}
+                onRestart={(j) => void restart(j)}
+              />
             ))}
           </div>
         </>

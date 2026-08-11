@@ -6,7 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { app, Notification } from 'electron'
 import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
@@ -78,6 +78,8 @@ export class DownloadManager {
   private partFiles = new Map<string, string>()
   private fileCandidates = new Map<string, string[]>()
   private activeCount = 0
+  /** Ordered ids of queued jobs, oldest first — the visible download queue. */
+  private order: string[] = []
 
   constructor(
     private getSettings: () => AppSettings,
@@ -86,9 +88,39 @@ export class DownloadManager {
     void this.loadHistory()
   }
 
-  /** All jobs, newest first. */
+  /** Active jobs in queue order, then finished history newest first. */
   list(): DownloadJob[] {
-    return [...this.jobs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    const active = [...this.jobs.values()]
+      .filter((j) => !isTerminal(j.status))
+      .sort((a, b) => this.orderIndex(a) - this.orderIndex(b) || a.createdAt.localeCompare(b.createdAt))
+    const history = [...this.jobs.values()]
+      .filter((j) => isTerminal(j.status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return [...active, ...history]
+  }
+
+  /** Moves a queued job up (-1) or down (+1) in the queue. */
+  async move(id: string, direction: -1 | 1): Promise<DownloadJob[]> {
+    const job = this.jobs.get(id)
+    if (!job || job.status !== 'queued') return this.list()
+    const idx = this.order.indexOf(id)
+    if (idx === -1) return this.list()
+    const swap = idx + direction
+    if (swap < 0 || swap >= this.order.length) return this.list()
+    ;[this.order[idx], this.order[swap]] = [this.order[swap], this.order[idx]]
+    return this.list()
+  }
+
+  /** Adds several URLs to the queue at once (batch import / clipboard). */
+  async startMany(urls: string[], presetId: string): Promise<DownloadJob[]> {
+    const bin = ytDlpPath()
+    if (!bin) return []
+    const created: DownloadJob[] = []
+    for (const url of urls) {
+      const res = await this.start({ url, presetId, playlist: true })
+      if (res.job) created.push(res.job)
+    }
+    return created
   }
 
   /** Drops finished jobs from history. */
@@ -174,6 +206,7 @@ export class DownloadManager {
     }
     this.options.set(job.id, { presetId: params.presetId, formatId: params.formatId, playlist: params.playlist ?? false })
     this.jobs.set(job.id, job)
+    this.order.push(job.id)
     this.emit(job)
     this.pump()
     return { ok: true, job }
@@ -183,6 +216,7 @@ export class DownloadManager {
     const job = this.jobs.get(id)
     if (!job || job.status !== 'downloading') return
     job.status = 'paused'
+    this.removeFromOrder(id)
     this.emit(job)
     this.activeCount = Math.max(0, this.activeCount - 1)
     const child = this.children.get(id)
@@ -200,6 +234,7 @@ export class DownloadManager {
     if (!job || job.status !== 'paused') return
     job.status = 'queued'
     job.error = null
+    if (!this.order.includes(id)) this.order.push(id)
     this.emit(job)
     this.pump()
   }
@@ -209,6 +244,7 @@ export class DownloadManager {
     if (!job || isTerminal(job.status)) return
     job.status = 'cancelled'
     job.completedAt = new Date().toISOString()
+    this.removeFromOrder(id)
     this.emit(job)
     void this.persist()
     if (job.status === 'cancelled' && this.children.get(id)) {
@@ -252,16 +288,27 @@ export class DownloadManager {
     this.pump()
   }
 
-  /** Starts queued jobs while slots are free. */
+  /** Starts queued jobs while slots are free, oldest in the queue first. */
   private pump(): void {
     const limit = this.getSettings().concurrentLimit
     const queued = [...this.jobs.values()]
       .filter((j) => j.status === 'queued')
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .sort((a, b) => this.orderIndex(a) - this.orderIndex(b))
     for (const job of queued) {
       if (this.activeCount >= limit) return
       this.spawn(job)
     }
+  }
+
+  /** Position of a job in the queue; jobs outside it sort last. */
+  private orderIndex(job: DownloadJob): number {
+    const i = this.order.indexOf(job.id)
+    return i === -1 ? this.order.length : i
+  }
+
+  private removeFromOrder(id: string): void {
+    const i = this.order.indexOf(id)
+    if (i !== -1) this.order.splice(i, 1)
   }
 
   /** Spawns the yt-dlp subprocess for a job. */
@@ -282,6 +329,7 @@ export class DownloadManager {
     job.progress = 0
     job.speed = ''
     job.eta = ''
+    this.removeFromOrder(job.id)
     this.emit(job)
 
     let child: ChildProcess
@@ -292,6 +340,7 @@ export class DownloadManager {
       job.error = e instanceof Error ? e.message : String(e)
       job.completedAt = new Date().toISOString()
       this.emit(job)
+      this.notify(job)
       void this.persist()
       return
     }
@@ -441,7 +490,25 @@ export class DownloadManager {
           .join(' ') || `yt-dlp exited with code ${code}`
     }
     this.emit(job)
+    this.notify(job)
     void this.persist()
+  }
+
+  /** Shows an OS notification for a finished download, when enabled. */
+  private notify(job: DownloadJob): void {
+    if (!this.getSettings().notifications) return
+    if (!Notification.isSupported()) return
+    const done = job.status === 'completed'
+    const body = done ? job.title : `${job.title} — ${job.error ?? 'unknown error'}`
+    try {
+      new Notification({
+        title: done ? 'Download complete' : 'Download failed',
+        body: body.length > 220 ? `${body.slice(0, 217)}…` : body,
+        silent: false
+      }).show()
+    } catch {
+      // notifications are best-effort
+    }
   }
 
   private emit(job: DownloadJob): void {

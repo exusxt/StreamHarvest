@@ -4,8 +4,11 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { dirname, join } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import type { AppStatus, FfmpegCheckResult, YtDlpCheckResult } from '../shared/types'
 import { DownloadManager } from './downloads'
+import { ClipboardMonitor } from './clipboard'
+import { TrayController } from './tray'
 import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
 import { downloadYtDlp, latestReleaseTag, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
@@ -13,6 +16,9 @@ import { checkForUpdates, initUpdater, installUpdate } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let manager: DownloadManager | null = null
+let clipboardMonitor: ClipboardMonitor | null = null
+let trayController: TrayController | null = null
+let quitting = false
 
 function registerIpc(): void {
   // App basics.
@@ -52,17 +58,52 @@ function registerIpc(): void {
   })
 
   // Download flow.
-  ipcMain.handle('dl:fetchMetadata', (_e, url: string) => manager?.fetchMetadata(String(url ?? '')))
-  ipcMain.handle('dl:start', (_e, params) => manager?.start(params ?? {}))
+  ipcMain.handle('dl:fetchMetadata', (_e, url: string) => {
+    const u = String(url ?? '')
+    clipboardMonitor?.consume(u)
+    return manager?.fetchMetadata(u)
+  })
+  ipcMain.handle('dl:start', (_e, params) => {
+    clipboardMonitor?.consume(String((params as { url?: string } | undefined)?.url ?? ''))
+    return manager?.start(params ?? {})
+  })
   ipcMain.handle('dl:pause', (_e, id: string) => manager?.pause(String(id)))
   ipcMain.handle('dl:resume', (_e, id: string) => manager?.resume(String(id)))
   ipcMain.handle('dl:cancel', (_e, id: string) => manager?.cancel(String(id)))
   ipcMain.handle('dl:list', () => manager?.list() ?? [])
   ipcMain.handle('dl:clearHistory', () => manager?.clearHistory())
+  ipcMain.handle('dl:move', (_e, id: string, direction: -1 | 1) => manager?.move(String(id), direction === -1 ? -1 : 1) ?? [])
+  ipcMain.handle('dl:addUrls', (_e, urls: string[]) => {
+    const clean = Array.isArray(urls) ? (urls as unknown[]).filter((u): u is string => typeof u === 'string' && !!u.trim()) : []
+    const preset = getSettings().audioOnly ? 'audio-mp3' : getSettings().defaultFormat
+    return manager?.startMany(clean, preset) ?? []
+  })
+  ipcMain.handle('dl:chooseUrlFile', async (): Promise<string[]> => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Import URLs from text file',
+      properties: ['openFile'],
+      filters: [{ name: 'Text files', extensions: ['txt', 'text'] }]
+    }
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return []
+    try {
+      const content = await readFile(result.filePaths[0], 'utf-8')
+      return extractUrls(content)
+    } catch {
+      return []
+    }
+  })
+
+  // Clipboard monitoring.
+  ipcMain.handle('clipboard:consume', (_e, url: string) => clipboardMonitor?.consume(String(url ?? '')))
 
   // Settings.
   ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:set', async (_e, patch) => setSettings(patch ?? {}))
+  ipcMain.handle('settings:set', async (_e, patch) => {
+    const next = await setSettings(patch ?? {})
+    trayController?.sync()
+    return next
+  })
   ipcMain.handle('settings:chooseDownloadsDir', async (): Promise<string | null> => {
     const options: Electron.OpenDialogOptions = {
       title: 'Choose download folder',
@@ -209,6 +250,20 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   mainWindow.on('maximize', () => mainWindow?.webContents.send('win:maximized', true))
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('win:maximized', false))
+
+  // Tray mode: hide to the tray instead of closing, so downloads keep running.
+  mainWindow.on('close', (e) => {
+    if (getSettings().minimizeToTray && !quitting) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+  mainWindow.on('minimize', () => {
+    if (getSettings().minimizeToTray && !quitting) {
+      mainWindow?.restore()
+      mainWindow?.hide()
+    }
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
@@ -229,6 +284,15 @@ app.whenReady().then(async () => {
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
   })
+  clipboardMonitor = new ClipboardMonitor(getSettings, (url) => {
+    mainWindow?.webContents.send('clipboard:url', url)
+  })
+  clipboardMonitor.start()
+  trayController = new TrayController(getSettings, () => mainWindow, () => {
+    quitting = true
+    app.quit()
+  })
+  trayController.sync()
   registerIpc()
   createWindow()
   initUpdater(mainWindow!)
@@ -241,8 +305,12 @@ app.whenReady().then(async () => {
   })
 })
 
+app.on('before-quit', () => {
+  quitting = true
+})
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin' && !getSettings().minimizeToTray) app.quit()
 })
 
 /**
@@ -284,4 +352,22 @@ function versionLess(a: string | null, b: string): boolean {
     if (x !== y) return x < y
   }
   return false
+}
+
+/** Pulls http(s) URLs out of free text (one or more per line). */
+function extractUrls(text: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    for (const m of line.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+      const url = m[0].replace(/[)\]}>]+$/, '')
+      if (!seen.has(url)) {
+        seen.add(url)
+        out.push(url)
+      }
+    }
+  }
+  return out
 }

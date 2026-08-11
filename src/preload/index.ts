@@ -17,10 +17,16 @@ const api = {
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:pause', id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:resume', id),
   cancelDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:cancel', id),
+  moveDownload: (id: string, direction: -1 | 1): Promise<DownloadJob[]> => ipcRenderer.invoke('dl:move', id, direction),
+  addUrls: (urls: string[]): Promise<DownloadJob[]> => ipcRenderer.invoke('dl:addUrls', urls),
+  chooseUrlFile: (): Promise<string[]> => ipcRenderer.invoke('dl:chooseUrlFile'),
   listDownloads: (): Promise<DownloadJob[]> => ipcRenderer.invoke('dl:list'),
   clearHistory: (): Promise<void> => ipcRenderer.invoke('dl:clearHistory'),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('app:reveal', path),
   openDownloadsFolder: (): Promise<void> => ipcRenderer.invoke('app:openDownloadsFolder'),
+
+  // Clipboard monitoring.
+  consumeClipboardUrl: (url: string): Promise<void> => ipcRenderer.invoke('clipboard:consume', url),
 
   // Settings.
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
@@ -63,6 +69,11 @@ const api = {
     const listener = (_e: IpcRendererEvent, job: DownloadJob): void => cb(job)
     ipcRenderer.on('dl:job', listener)
     return () => ipcRenderer.removeListener('dl:job', listener)
+  },
+  onClipboardUrl: (cb: (url: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, url: string): void => cb(url)
+    ipcRenderer.on('clipboard:url', listener)
+    return () => ipcRenderer.removeListener('clipboard:url', listener)
   },
   onYtDlpStatus: (cb: (status: YtDlpStatus) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, status: YtDlpStatus): void => cb(status)

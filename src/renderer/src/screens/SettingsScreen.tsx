@@ -3,14 +3,53 @@
  * engine section (yt-dlp and ffmpeg install / update / check / remove).
  */
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Film, Folder, FolderOpen, RefreshCw, Settings2, Trash2, Wrench, Zap } from 'lucide-react'
+import { CheckCircle2, Film, Folder, FolderOpen, Palette, RefreshCw, Settings2, Trash2, Wrench, Zap } from 'lucide-react'
 import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, YtDlpCheckResult } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { Badge, Button, Checkbox, Field, Input, Panel, ProgressBar, Select, Spinner } from '../components/ui'
-import { formatBytes } from '../lib'
+import { cn, formatBytes, THEMES, THEME_IDS, THEME_NAMES, type ThemeId } from '../lib'
+
+function ThemeCard({
+  id,
+  active,
+  onSelect
+}: {
+  id: ThemeId
+  active: boolean
+  onSelect: (id: ThemeId) => void
+}): React.JSX.Element {
+  const vars = THEMES[id].vars
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      className={cn(
+        'group flex flex-col gap-1.5 rounded-lg p-1.5 text-left transition-colors',
+        active ? 'bg-sc64-panel2' : 'hover:bg-sc64-panel2/60'
+      )}
+    >
+      <div
+        className="relative h-12 overflow-hidden rounded-md border"
+        style={{ background: vars['--sc64-bg'], borderColor: active ? 'var(--sc64-accent)' : vars['--sc64-border'] }}
+      >
+        <div
+          className="absolute inset-x-0 top-0 h-3.5"
+          style={{ background: vars['--sc64-panel'], borderBottom: `1px solid ${vars['--sc64-border']}` }}
+        />
+        <div className="absolute left-1.5 top-1 h-1.5 w-1.5 rounded-sm" style={{ background: vars['--sc64-accent'] }} />
+        <div className="absolute bottom-1.5 left-1.5 right-1.5 h-1.5 rounded-sm" style={{ background: vars['--sc64-text'], opacity: 0.7 }} />
+      </div>
+      <span className={cn('truncate px-0.5 text-[11px]', active ? 'font-semibold text-sc64-accent' : 'text-sc64-muted')}>
+        {THEME_NAMES[id]}
+      </span>
+    </button>
+  )
+}
 
 export function SettingsScreen({
   status,
+  theme,
+  onThemeChange,
   engineBusy,
   installProgress,
   onInstall,
@@ -23,6 +62,8 @@ export function SettingsScreen({
   onRemoveFfmpeg
 }: {
   status: AppStatus | null
+  theme: ThemeId
+  onThemeChange: (theme: ThemeId) => void
   engineBusy: boolean
   installProgress: BinaryProgress | null
   onInstall: () => void
@@ -149,7 +190,43 @@ export function SettingsScreen({
             onChange={(v) => update({ audioOnly: v, defaultFormat: v ? 'audio-mp3' : 'best' })}
           />
         </div>
+        <div className="mt-3">
+          <Checkbox
+            label="Watch clipboard for links"
+            hint="When you copy a video link anywhere, StreamHarvest offers to download it."
+            checked={settings?.clipboardMonitor ?? true}
+            onChange={(v) => update({ clipboardMonitor: v })}
+          />
+        </div>
+        <div className="mt-3">
+          <Checkbox
+            label="Minimize to system tray"
+            hint="Closing or minimizing keeps downloads running in the background. Use the tray icon to reopen."
+            checked={settings?.minimizeToTray ?? false}
+            onChange={(v) => update({ minimizeToTray: v })}
+          />
+        </div>
+        <div className="mt-3">
+          <Checkbox
+            label="Desktop notifications"
+            hint="Show a system notification when a download completes or fails."
+            checked={settings?.notifications ?? true}
+            onChange={(v) => update({ notifications: v })}
+          />
+        </div>
         {saved ? <p className="mt-3 text-xs text-sc64-good">Settings saved.</p> : null}
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <Palette className="h-3.5 w-3.5" /> Theme
+        </div>
+        <p className="mb-3 text-xs text-sc64-muted">Pick a look for the whole app. Gallery themes use a random photo background.</p>
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5">
+          {THEME_IDS.map((id) => (
+            <ThemeCard key={id} id={id} active={theme === id} onSelect={onThemeChange} />
+          ))}
+        </div>
       </Panel>
 
       <Panel>

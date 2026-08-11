@@ -12,7 +12,10 @@ const DEFAULTS: AppSettings = {
   downloadsDir: defaultDownloadsDir,
   defaultFormat: 'best',
   concurrentLimit: 2,
-  audioOnly: false
+  audioOnly: false,
+  clipboardMonitor: true,
+  minimizeToTray: false,
+  notifications: true
 }
 
 let settings: AppSettings = { ...DEFAULTS }
@@ -28,6 +31,9 @@ export async function loadSettings(): Promise<void> {
     settings = { ...DEFAULTS, ...parsed }
     settings.concurrentLimit = Math.max(1, Math.min(8, Math.floor(settings.concurrentLimit) || 1))
     if (typeof settings.downloadsDir !== 'string' || !settings.downloadsDir) settings.downloadsDir = DEFAULTS.downloadsDir
+    settings.clipboardMonitor = settings.clipboardMonitor !== false
+    settings.minimizeToTray = settings.minimizeToTray === true
+    settings.notifications = settings.notifications !== false
   } catch {
     // no settings yet — keep defaults
   }
