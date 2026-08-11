@@ -5,6 +5,19 @@ All notable changes to StreamHarvest.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.2] - 2026-08-11
+
+### Fixed
+
+- Robust portable update replace (unicode-safe bat, logging, pid wait)
+
+### Infra
+
+- Bump setup-node to v7 (fixes punycode deprecation warning)
+- Bump upload-artifact to v7 (Node 24 runtime)
+
+[Compare v0.3.1...v0.3.2](https://github.com/exusxt/StreamHarvest/compare/v0.3.1...v0.3.2)
+
 ## [v0.3.1] - 2026-08-11
 
 ### Fixed
