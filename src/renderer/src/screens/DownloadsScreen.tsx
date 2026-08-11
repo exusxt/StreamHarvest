@@ -6,28 +6,11 @@
 import { useState } from 'react'
 import { ArrowDown, ArrowUp, FolderOpen, History, ListPlus, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
 import type { DownloadJob } from '../../../shared/types'
+import { extractUrls } from '../../../shared/urls'
 import { Badge, Button, Panel, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib'
 
 const ACTIVE = new Set(['queued', 'fetching', 'downloading', 'paused'])
-const URL_RE = /https?:\/\/[^\s<>"']+/g
-
-function extractUrls(text: string): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line) continue
-    for (const m of line.matchAll(URL_RE)) {
-      const url = m[0].replace(/[)\]}>]+$/, '')
-      if (!seen.has(url)) {
-        seen.add(url)
-        out.push(url)
-      }
-    }
-  }
-  return out
-}
 
 function fileName(p: string): string {
   return p.split(/[\\/]/).pop() ?? p
@@ -181,7 +164,8 @@ export function DownloadsScreen({
         formatId: job.formatId,
         title: job.title,
         thumbnail: job.thumbnail,
-        playlist: job.playlist
+        playlist: job.playlist,
+        playlistItems: job.playlistItems
       })
     } catch {
       // surfaced by the job list update

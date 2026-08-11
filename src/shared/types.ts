@@ -55,6 +55,13 @@ export const QUALITY_PRESETS: QualityPreset[] = [
   { id: 'audio-opus', label: 'Audio only (OPUS)', selector: 'bestaudio', extraArgs: ['--extract-audio', '--audio-format', 'opus'] }
 ]
 
+/** One entry of a playlist/channel, listed so the user can pick videos. */
+export interface PlaylistEntry {
+  id: string
+  title: string
+  duration: number | null
+}
+
 /** Metadata fetched for a pasted URL, shown before downloading. */
 export interface VideoMetadata {
   id: string
@@ -68,6 +75,8 @@ export interface VideoMetadata {
   playlist: boolean
   /** Entry count when playlist is true. */
   entryCount: number | null
+  /** Playlist entries when playlist is true (flat list, capped). */
+  entries: PlaylistEntry[] | null
   error: string | null
 }
 
@@ -88,6 +97,8 @@ export interface DownloadJob {
   formatId?: string
   /** Whether the source URL is a playlist/channel. */
   playlist: boolean
+  /** yt-dlp `--playlist-items` value when only a subset was selected. */
+  playlistItems?: string
   status: DownloadStatus
   /** 0-100 progress while downloading. */
   progress: number

@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, Notification } from 'electron'
-import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, VideoMetadata } from '../shared/types'
+import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, PlaylistEntry, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
 import { ytDlpPath } from './ytdlp'
@@ -20,6 +20,7 @@ interface JobOptions {
   presetId: string
   formatId?: string
   playlist: boolean
+  playlistItems?: string
 }
 
 interface StartParams {
@@ -29,6 +30,7 @@ interface StartParams {
   title?: string
   thumbnail?: string | null
   playlist?: boolean
+  playlistItems?: string
 }
 
 function historyFile(): string {
@@ -135,7 +137,7 @@ export class DownloadManager {
   async fetchMetadata(url: string): Promise<VideoMetadata> {
     const bin = ytDlpPath()
     if (!bin) {
-      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, error: 'yt-dlp is not installed yet.' }
+      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: 'yt-dlp is not installed yet.' }
     }
     const args = ['-J', '--flat-playlist', '--no-warnings', url]
     try {
@@ -154,6 +156,7 @@ export class DownloadManager {
           formats: [],
           playlist: true,
           entryCount: entries.length > 0 ? entries.length : null,
+          entries: buildPlaylistEntries(entries),
           error: null
         }
       }
@@ -167,11 +170,12 @@ export class DownloadManager {
         formats: buildFormats(data),
         playlist: false,
         entryCount: null,
+        entries: null,
         error: null
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, error: msg }
+      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: msg }
     }
   }
 
@@ -193,6 +197,7 @@ export class DownloadManager {
       presetId: params.presetId,
       formatId: params.formatId,
       playlist: params.playlist ?? false,
+      playlistItems: params.playlistItems,
       status: 'queued',
       progress: 0,
       speed: '',
@@ -204,7 +209,7 @@ export class DownloadManager {
       createdAt: new Date().toISOString(),
       completedAt: null
     }
-    this.options.set(job.id, { presetId: params.presetId, formatId: params.formatId, playlist: params.playlist ?? false })
+    this.options.set(job.id, { presetId: params.presetId, formatId: params.formatId, playlist: params.playlist ?? false, playlistItems: params.playlistItems })
     this.jobs.set(job.id, job)
     this.order.push(job.id)
     this.emit(job)
@@ -323,6 +328,7 @@ export class DownloadManager {
     if (managedFfmpeg) args.push('--ffmpeg-location', ffmpegStoreDir())
     if (preset.extraArgs) args.push(...preset.extraArgs)
     if (!opts.playlist) args.push('--no-playlist')
+    if (opts.playlist && opts.playlistItems) args.push('--playlist-items', opts.playlistItems)
     args.push(job.url)
 
     job.status = 'downloading'
@@ -545,6 +551,22 @@ function presetLabel(presetId: string, formatId?: string): string {
 
 function isPlaylist(data: Record<string, unknown>): boolean {
   return data._type === 'playlist' || Array.isArray(data.entries)
+}
+
+const PLAYLIST_ENTRY_LIMIT = 500
+
+/** Maps raw yt-dlp playlist entries into the compact shape we send to the UI. */
+function buildPlaylistEntries(entries: Array<Record<string, unknown>>): PlaylistEntry[] {
+  const out: PlaylistEntry[] = []
+  for (const e of entries) {
+    out.push({
+      id: str(e.id) ?? str(e.url) ?? '',
+      title: str(e.title) || 'Untitled',
+      duration: num(e.duration)
+    })
+    if (out.length >= PLAYLIST_ENTRY_LIMIT) break
+  }
+  return out
 }
 
 function videoIdFromPaths(paths: string[]): string | null {

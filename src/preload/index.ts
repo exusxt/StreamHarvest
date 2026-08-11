@@ -12,7 +12,7 @@ const api = {
 
   // Metadata + downloads.
   fetchMetadata: (url: string): Promise<VideoMetadata> => ipcRenderer.invoke('dl:fetchMetadata', url),
-  startDownload: (params: { url: string; presetId: string; formatId?: string; title?: string; thumbnail?: string | null; playlist?: boolean }): Promise<{ ok: boolean; job?: DownloadJob; error?: string }> =>
+  startDownload: (params: { url: string; presetId: string; formatId?: string; title?: string; thumbnail?: string | null; playlist?: boolean; playlistItems?: string }): Promise<{ ok: boolean; job?: DownloadJob; error?: string }> =>
     ipcRenderer.invoke('dl:start', params),
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:pause', id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:resume', id),

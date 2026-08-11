@@ -3,8 +3,8 @@
  * The pasted link is turned into a video card (thumbnail, title, duration)
  * before the user commits to a download.
  */
-import { useState } from 'react'
-import { ArrowRight, Clock, Download, Folder, Link2, ListVideo, Search, Upload, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowRight, Check, Clock, Download, Folder, Link2, ListChecks, ListVideo, Search, Upload, User, X } from 'lucide-react'
 import type { AppStatus, VideoMetadata } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { Badge, Button, Field, Input, Panel, Select, Spinner } from '../components/ui'
@@ -30,6 +30,50 @@ export function HomeScreen({
   const [quality, setQuality] = useState('preset:best')
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    if (metadata?.playlist && metadata.entries) {
+      setSelected(new Set(metadata.entries.map((_, i) => i + 1)))
+    } else {
+      setSelected(new Set())
+    }
+  }, [metadata])
+
+  const toggleEntry = (index: number): void => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
+  const selectAll = (): void => {
+    if (!metadata?.entries) return
+    setSelected(new Set(metadata.entries.map((_, i) => i + 1)))
+  }
+
+  const selectNone = (): void => setSelected(new Set())
+
+  const buildPlaylistItems = (sel: Set<number>): string => {
+    const nums = [...sel].sort((a, b) => a - b)
+    const parts: string[] = []
+    if (nums.length === 0) return ''
+    let start = nums[0]
+    let prev = nums[0]
+    for (let i = 1; i <= nums.length; i++) {
+      const cur = nums[i]
+      if (cur === prev + 1) {
+        prev = cur
+        continue
+      }
+      parts.push(start === prev ? String(start) : `${start}-${prev}`)
+      start = cur
+      prev = cur
+    }
+    return parts.join(',')
+  }
 
   const engineReady = status?.ytDlp.present ?? false
 
@@ -67,13 +111,17 @@ export function HomeScreen({
       presetId = quality.slice('preset:'.length)
     }
     try {
+      const allSelected = metadata.entries ? selected.size === metadata.entries.length : true
+      const playlistItems =
+        metadata.playlist && metadata.entries && !allSelected ? buildPlaylistItems(selected) : undefined
       const res = await window.api.startDownload({
         url: metadata.webpageUrl,
         presetId,
         formatId,
         title: metadata.title,
         thumbnail: metadata.thumbnail,
-        playlist: metadata.playlist
+        playlist: metadata.playlist,
+        playlistItems
       })
       if (!res.ok) {
         setStartError(res.error ?? 'Could not start the download.')
@@ -172,7 +220,50 @@ export function HomeScreen({
                         </option>
                       ))}
                     </optgroup>
-                    {metadata.formats.length > 0 ? (
+          {metadata.playlist && metadata.entries ? (
+            <div className="mt-4 border-t border-sc64-border pt-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+                  <ListChecks className="h-3.5 w-3.5" /> Videos — {selected.size} of {metadata.entries.length} selected
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={selectAll}>
+                    <Check className="h-3.5 w-3.5" /> All
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={selectNone}>
+                    <X className="h-3.5 w-3.5" /> None
+                  </Button>
+                </div>
+              </div>
+              <div className="grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                {metadata.entries.map((entry, i) => {
+                  const index = i + 1
+                  return (
+                    <label
+                      key={entry.id || index}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/60 px-3 py-1.5 text-xs hover:border-sc64-borderlight"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 shrink-0 accent-sc64-accent"
+                        checked={selected.has(index)}
+                        onChange={() => toggleEntry(index)}
+                      />
+                      <span className="w-7 shrink-0 text-right font-mono text-sc64-muted">{index}</span>
+                      <span className="min-w-0 flex-1 truncate text-sc64-text" title={entry.title}>
+                        {entry.title}
+                      </span>
+                      {entry.duration ? (
+                        <span className="shrink-0 font-mono text-sc64-muted">{formatDuration(entry.duration)}</span>
+                      ) : null}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {metadata.formats.length > 0 ? (
                       <optgroup label="Specific formats (advanced)">
                         {metadata.formats.map((f) => (
                           <option key={f.id} value={`format:${f.id}`}>
@@ -188,11 +279,15 @@ export function HomeScreen({
                     variant="primary"
                     size="lg"
                     className="w-full"
-                    disabled={starting}
+                    disabled={starting || (metadata.playlist && metadata.entries ? selected.size === 0 : false)}
                     onClick={() => void start()}
                   >
                     {starting ? <Spinner className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                    {starting ? 'Starting…' : 'Download'}
+                    {starting
+                      ? 'Starting…'
+                      : metadata.playlist && metadata.entries
+                        ? `Download ${selected.size} of ${metadata.entries.length}`
+                        : 'Download'}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>

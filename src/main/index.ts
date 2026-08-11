@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { AppStatus, FfmpegCheckResult, YtDlpCheckResult } from '../shared/types'
+import { extractUrls } from '../shared/urls'
 import { DownloadManager } from './downloads'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
@@ -354,20 +355,4 @@ function versionLess(a: string | null, b: string): boolean {
   return false
 }
 
-/** Pulls http(s) URLs out of free text (one or more per line). */
-function extractUrls(text: string): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line) continue
-    for (const m of line.matchAll(/https?:\/\/[^\s<>"']+/g)) {
-      const url = m[0].replace(/[)\]}>]+$/, '')
-      if (!seen.has(url)) {
-        seen.add(url)
-        out.push(url)
-      }
-    }
-  }
-  return out
-}
+

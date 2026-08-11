@@ -3,10 +3,11 @@
  * shows the gallery background for glass themes, and routes between the
  * feature screens behind the frameless title bar and sidebar.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Download, RefreshCw, Shuffle, X } from 'lucide-react'
 import type { AppStatus, BinaryProgress, DownloadJob, UpdateState, VideoMetadata } from '../../shared/types'
 import { QUALITY_PRESETS } from '../../shared/types'
+import { extractUrls } from '../../shared/urls'
 import { applyTheme, formatDuration, isGalleryTheme, THEMES, type ThemeId } from './lib'
 import { BACKGROUNDS } from './backgrounds'
 import { TitleBar } from './components/TitleBar'
@@ -54,6 +55,8 @@ export default function App(): React.JSX.Element {
   const [ffmpegBannerDismissed, setFfmpegBannerDismissed] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
   const [clips, setClips] = useState<ClipItem[]>([])
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -287,6 +290,63 @@ export default function App(): React.JSX.Element {
     if (next) setJobs(next)
   }
 
+  const processDrop = useCallback(async (e: DragEvent): Promise<void> => {
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    const urls = new Set<string>()
+    const files = Array.from(e.dataTransfer?.files ?? [])
+    for (const f of files) {
+      if (/\.(txt|text)$/i.test(f.name)) {
+        try {
+          for (const u of extractUrls(await f.text())) urls.add(u)
+        } catch {
+          // unreadable file — ignore
+        }
+      }
+    }
+    const text = e.dataTransfer?.getData('text/plain') || e.dataTransfer?.getData('text/uri-list') || ''
+    for (const u of extractUrls(text)) urls.add(u)
+    if (urls.size > 0) {
+      await window.api.addUrls([...urls])
+      await window.api.listDownloads().then(setJobs).catch(() => undefined)
+      setScreen('downloads')
+    }
+  }, [])
+
+  useEffect(() => {
+    const onDragOver = (e: DragEvent): void => {
+      const types = e.dataTransfer?.types ?? []
+      if (types.includes('Files') || types.includes('text/uri-list')) e.preventDefault()
+    }
+    const onDragEnter = (e: DragEvent): void => {
+      e.preventDefault()
+      dragDepth.current += 1
+      setDragging(true)
+    }
+    const onDragLeave = (e: DragEvent): void => {
+      e.preventDefault()
+      dragDepth.current -= 1
+      if (dragDepth.current <= 0) {
+        dragDepth.current = 0
+        setDragging(false)
+      }
+    }
+    const onDrop = (e: DragEvent): void => {
+      void processDrop(e)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragenter', onDragEnter)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragenter', onDragEnter)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [processDrop])
+
   const screenEl = useMemo(() => {
     switch (screen) {
       case 'home':
@@ -440,6 +500,16 @@ export default function App(): React.JSX.Element {
       {update && update.state !== 'not-available' ? (
         <div className="pointer-events-none absolute bottom-4 right-4 z-50">
           <UpdateToast state={update} onDismiss={() => setUpdate(null)} />
+        </div>
+      ) : null}
+
+      {dragging ? (
+        <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-sc64-accent bg-sc64-panel/95 px-10 py-8 shadow-2xl">
+            <Download className="h-8 w-8 text-sc64-accent" />
+            <p className="text-sm font-semibold text-sc64-text">Drop URLs to queue them</p>
+            <p className="text-xs text-sc64-muted">A link, a selection of links, or a .txt file full of links</p>
+          </div>
         </div>
       ) : null}
 
