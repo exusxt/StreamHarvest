@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Check, Clock, Download, Folder, Link2, ListChecks, ListVideo, Search, Upload, User, X } from 'lucide-react'
 import type { AppStatus, VideoMetadata } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
+import { buildPlaylistItems } from '../../../shared/playlist'
 import { Badge, Button, Field, Input, Panel, Select, Spinner } from '../components/ui'
 import { cn, formatDuration } from '../lib'
 
@@ -55,25 +56,6 @@ export function HomeScreen({
   }
 
   const selectNone = (): void => setSelected(new Set())
-
-  const buildPlaylistItems = (sel: Set<number>): string => {
-    const nums = [...sel].sort((a, b) => a - b)
-    const parts: string[] = []
-    if (nums.length === 0) return ''
-    let start = nums[0]
-    let prev = nums[0]
-    for (let i = 1; i <= nums.length; i++) {
-      const cur = nums[i]
-      if (cur === prev + 1) {
-        prev = cur
-        continue
-      }
-      parts.push(start === prev ? String(start) : `${start}-${prev}`)
-      start = cur
-      prev = cur
-    }
-    return parts.join(',')
-  }
 
   const engineReady = status?.ytDlp.present ?? false
 
@@ -220,6 +202,42 @@ export function HomeScreen({
                         </option>
                       ))}
                     </optgroup>
+                    {metadata.formats.length > 0 ? (
+                      <optgroup label="Specific formats (advanced)">
+                        {metadata.formats.map((f) => (
+                          <option key={f.id} value={`format:${f.id}`}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </Select>
+                </Field>
+                <div className="flex items-end">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full"
+                    disabled={starting || (metadata.playlist && metadata.entries ? selected.size === 0 : false)}
+                    onClick={() => void start()}
+                  >
+                    {starting ? <Spinner className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                    {starting
+                      ? 'Starting…'
+                      : metadata.playlist && metadata.entries
+                        ? `Download ${selected.size} of ${metadata.entries.length}`
+                        : 'Download'}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              {chosenPreset?.extraArgs?.length ? (
+                <p className="mt-2 text-[11px] text-sc64-muted">Conversion with ffmpeg will run after downloading.</p>
+              ) : null}
+              {startError ? <p className="mt-2 text-sm text-sc64-bad">{startError}</p> : null}
+            </div>
+          </div>
+
           {metadata.playlist && metadata.entries ? (
             <div className="mt-4 border-t border-sc64-border pt-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -262,42 +280,6 @@ export function HomeScreen({
               </div>
             </div>
           ) : null}
-
-          {metadata.formats.length > 0 ? (
-                      <optgroup label="Specific formats (advanced)">
-                        {metadata.formats.map((f) => (
-                          <option key={f.id} value={`format:${f.id}`}>
-                            {f.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </Select>
-                </Field>
-                <div className="flex items-end">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full"
-                    disabled={starting || (metadata.playlist && metadata.entries ? selected.size === 0 : false)}
-                    onClick={() => void start()}
-                  >
-                    {starting ? <Spinner className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                    {starting
-                      ? 'Starting…'
-                      : metadata.playlist && metadata.entries
-                        ? `Download ${selected.size} of ${metadata.entries.length}`
-                        : 'Download'}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              {chosenPreset?.extraArgs?.length ? (
-                <p className="mt-2 text-[11px] text-sc64-muted">Conversion with ffmpeg will run after downloading.</p>
-              ) : null}
-              {startError ? <p className="mt-2 text-sm text-sc64-bad">{startError}</p> : null}
-            </div>
-          </div>
 
           {metadata.formats.length > 0 ? (
             <div className="mt-4 border-t border-sc64-border pt-4">

@@ -4,9 +4,10 @@
  * feature screens behind the frameless title bar and sidebar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Download, RefreshCw, Shuffle, X } from 'lucide-react'
+import { AlertTriangle, Check, Download, ListChecks, RefreshCw, Shuffle, X } from 'lucide-react'
 import type { AppStatus, BinaryProgress, DownloadJob, UpdateState, VideoMetadata } from '../../shared/types'
 import { QUALITY_PRESETS } from '../../shared/types'
+import { buildPlaylistItems } from '../../shared/playlist'
 import { extractUrls } from '../../shared/urls'
 import { applyTheme, formatDuration, isGalleryTheme, THEMES, type ThemeId } from './lib'
 import { BACKGROUNDS } from './backgrounds'
@@ -29,6 +30,8 @@ interface ClipItem {
   busy: boolean
   done: boolean
   error: string | null
+  selected: Set<number>
+  expanded: boolean
 }
 
 function loadTheme(): ThemeId {
@@ -107,7 +110,9 @@ export default function App(): React.JSX.Element {
           quality: 'preset:best',
           busy: true,
           done: false,
-          error: null
+          error: null,
+          selected: new Set(),
+          expanded: false
         }
         window.api
           .getSettings()
@@ -115,7 +120,13 @@ export default function App(): React.JSX.Element {
           .catch(() => undefined)
         window.api
           .fetchMetadata(url)
-          .then((meta) => updateClip(item.id, { meta, busy: false }))
+          .then((meta) =>
+            updateClip(item.id, {
+              meta,
+              busy: false,
+              selected: meta.playlist && meta.entries ? new Set(meta.entries.map((_, i) => i + 1)) : new Set()
+            })
+          )
           .catch(() => updateClip(item.id, { meta: null, busy: false }))
         return [...prev, item]
       })
@@ -252,6 +263,26 @@ export default function App(): React.JSX.Element {
     setClips([])
   }
 
+  const toggleClipEntry = (item: ClipItem, index: number): void => {
+    updateClip(item.id, {
+      selected: new Set(
+        (() => {
+          const next = new Set(item.selected)
+          if (next.has(index)) next.delete(index)
+          else next.add(index)
+          return next
+        })()
+      )
+    })
+  }
+
+  const selectAllClip = (item: ClipItem): void => {
+    if (!item.meta?.entries) return
+    updateClip(item.id, { selected: new Set(item.meta.entries.map((_, i) => i + 1)) })
+  }
+
+  const selectNoneClip = (item: ClipItem): void => updateClip(item.id, { selected: new Set() })
+
   const downloadClip = async (item: ClipItem): Promise<void> => {
     if (item.busy || item.done) return
     let presetId = 'best'
@@ -263,6 +294,12 @@ export default function App(): React.JSX.Element {
       presetId = item.quality.slice('preset:'.length)
     }
     const meta = item.meta && !item.meta.error ? item.meta : null
+    if (meta?.playlist && meta.entries && item.selected.size === 0) {
+      updateClip(item.id, { error: 'Select at least one video to download.' })
+      return
+    }
+    const allSelected = meta?.entries ? item.selected.size === meta.entries.length : true
+    const playlistItems = meta?.playlist && meta.entries && !allSelected ? buildPlaylistItems(item.selected) : undefined
     updateClip(item.id, { busy: true, error: null })
     try {
       const res = await window.api.startDownload({
@@ -271,7 +308,8 @@ export default function App(): React.JSX.Element {
         formatId,
         title: meta?.title || item.url,
         thumbnail: meta?.thumbnail ?? null,
-        playlist: meta ? meta.playlist : true
+        playlist: meta ? meta.playlist : true,
+        playlistItems
       })
       if (!res.ok) {
         updateClip(item.id, { busy: false, error: res.error ?? 'Could not start the download.' })
@@ -531,66 +569,124 @@ export default function App(): React.JSX.Element {
                     <Spinner className="h-4 w-4 text-sc64-accent" /> Fetching video info…
                   </div>
                 ) : item.meta && !item.meta.error ? (
-                  <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/40 p-2 sm:flex-row sm:items-center">
-                    {item.meta.thumbnail ? (
-                      <div className="relative w-full shrink-0 sm:w-36">
-                        <img src={item.meta.thumbnail} alt="" className="aspect-video w-full rounded-md border border-sc64-border object-cover" />
-                        {item.meta.duration ? (
-                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 font-mono text-[10px] text-white">
-                            {formatDuration(item.meta.duration)}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
-                        <Badge tone="accent">{item.meta.playlist ? 'Playlist' : 'Video'}</Badge>
-                        {item.meta.playlist && item.meta.entryCount ? (
-                          <Badge tone="default">{item.meta.entryCount} videos</Badge>
-                        ) : null}
-                      </div>
-                      <h3 className="truncate text-sm font-semibold text-sc64-text" title={item.meta.title}>
-                        {item.meta.title}
-                      </h3>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <div className="min-w-0 sm:w-52">
-                          <Select value={item.quality} onChange={(e) => updateClip(item.id, { quality: e.target.value })} className="w-full">
-                            <optgroup label="Presets">
-                              {QUALITY_PRESETS.map((p) => (
-                                <option key={p.id} value={`preset:${p.id}`}>
-                                  {p.label}
-                                </option>
-                              ))}
-                            </optgroup>
-                            {item.meta.formats.length > 0 ? (
-                              <optgroup label="Specific formats (advanced)">
-                                {item.meta.formats.map((f) => (
-                                  <option key={f.id} value={`format:${f.id}`}>
-                                    {f.label}
+                  <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/40 p-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      {item.meta.thumbnail ? (
+                        <div className="relative w-full shrink-0 sm:w-36">
+                          <img src={item.meta.thumbnail} alt="" className="aspect-video w-full rounded-md border border-sc64-border object-cover" />
+                          {item.meta.duration ? (
+                            <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 font-mono text-[10px] text-white">
+                              {formatDuration(item.meta.duration)}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                          <Badge tone="accent">{item.meta.playlist ? 'Playlist' : 'Video'}</Badge>
+                          {item.meta.playlist && item.meta.entryCount ? (
+                            <Badge tone="default">{item.meta.entryCount} videos</Badge>
+                          ) : null}
+                        </div>
+                        <h3 className="truncate text-sm font-semibold text-sc64-text" title={item.meta.title}>
+                          {item.meta.title}
+                        </h3>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <div className="min-w-0 sm:w-52">
+                            <Select value={item.quality} onChange={(e) => updateClip(item.id, { quality: e.target.value })} className="w-full">
+                              <optgroup label="Presets">
+                                {QUALITY_PRESETS.map((p) => (
+                                  <option key={p.id} value={`preset:${p.id}`}>
+                                    {p.label}
                                   </option>
                                 ))}
                               </optgroup>
-                            ) : null}
-                          </Select>
-                        </div>
-                        {item.done ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-sc64-good">
-                            <Download className="h-3.5 w-3.5" /> Added to queue
-                          </span>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <Button variant="primary" size="sm" disabled={item.busy} onClick={() => void downloadClip(item)}>
-                              {item.busy ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                              Download
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => abortClip(item)}>
-                              Abort
-                            </Button>
+                              {item.meta.formats.length > 0 ? (
+                                <optgroup label="Specific formats (advanced)">
+                                  {item.meta.formats.map((f) => (
+                                    <option key={f.id} value={`format:${f.id}`}>
+                                      {f.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                            </Select>
                           </div>
-                        )}
+                          {item.done ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-sc64-good">
+                              <Download className="h-3.5 w-3.5" /> Added to queue
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={item.busy}
+                                onClick={() => void downloadClip(item)}
+                              >
+                                {item.busy ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+                                {item.meta.playlist && item.meta.entries
+                                  ? `Download ${item.selected.size} of ${item.meta.entries.length}`
+                                  : 'Download'}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => abortClip(item)}>
+                                Abort
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {item.error ? <p className="mt-1.5 text-xs text-sc64-bad">{item.error}</p> : null}
                       </div>
-                      {item.error ? <p className="mt-1.5 text-xs text-sc64-bad">{item.error}</p> : null}
                     </div>
+                    {item.meta.playlist && item.meta.entries ? (
+                      <div className="border-t border-sc64-border pt-2">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-2 text-xs text-sc64-muted hover:text-sc64-text"
+                          onClick={() => updateClip(item.id, { expanded: !item.expanded })}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <ListChecks className="h-3.5 w-3.5" /> Select videos — {item.selected.size} of{' '}
+                            {item.meta.entries.length}
+                          </span>
+                          <span>{item.expanded ? 'Hide' : 'Show'}</span>
+                        </button>
+                        {item.expanded ? (
+                          <div className="mt-2">
+                            <div className="mb-1.5 flex items-center gap-2">
+                              <Button variant="outline" size="sm" onClick={() => selectAllClip(item)}>
+                                <Check className="h-3 w-3" /> All
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => selectNoneClip(item)}>
+                                <X className="h-3 w-3" /> None
+                              </Button>
+                            </div>
+                            <div className="grid max-h-44 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
+                              {item.meta.entries.map((entry, i) => {
+                                const index = i + 1
+                                return (
+                                  <label
+                                    key={entry.id || index}
+                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-sc64-border bg-sc64-panel/50 px-2 py-1 text-xs hover:border-sc64-borderlight"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-3.5 w-3.5 shrink-0 accent-sc64-accent"
+                                      checked={item.selected.has(index)}
+                                      onChange={() => toggleClipEntry(item, index)}
+                                    />
+                                    <span className="w-7 shrink-0 text-right font-mono text-sc64-muted">{index}</span>
+                                    <span className="min-w-0 flex-1 truncate text-sc64-text" title={entry.title}>
+                                      {entry.title}
+                                    </span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div key={item.id} className="flex items-center gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/40 p-2">
