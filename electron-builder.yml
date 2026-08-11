@@ -16,13 +16,15 @@ win:
     - target: portable
       arch:
         - x64
+    - target: portable
+      arch:
         - arm64
   icon: build/icon.ico
   executableName: StreamHarvest
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: StreamHarvest-Setup-${version}-${arch}.${ext}
+  artifactName: StreamHarvest-Setup-${version}.${ext}
 portable:
   artifactName: StreamHarvest-${version}-${arch}.${ext}
 mac:

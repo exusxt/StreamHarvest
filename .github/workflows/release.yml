@@ -69,7 +69,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: |
+          if [[ "${{ matrix.args }}" == "--win" ]]; then
+            PUBLISH=${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+            npx electron-builder --win --config.win.target=portable --x64 --publish "$PUBLISH"
+            npx electron-builder --win --config.win.target=portable --arm64 --publish "$PUBLISH"
+            npx electron-builder --win --config.win.target=nsis --x64 --arm64 --publish "$PUBLISH"
+          else
+            npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
