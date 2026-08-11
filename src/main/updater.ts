@@ -105,27 +105,68 @@ function portableReplace(): void {
   // locked). Run a small detached batch file that waits for the app to exit and
   // then swaps the files and relaunches. A .bat is used instead of PowerShell to
   // keep the heuristic surface of the packaged binary smaller.
+  //
+  // The script itself is ASCII-only; paths are passed as environment variables.
+  // cmd.exe re-reads .bat files through its OEM codepage, so any non-ASCII
+  // characters embedded literally in the file (user profile, folder names) would
+  // be garbled and the move would silently fail. Environment variables carry the
+  // paths as Unicode and survive intact.
+  const tempDir = app.getPath('temp')
+  const batPath = join(tempDir, 'streamharvest-portable-update.bat')
+  const logPath = join(tempDir, 'streamharvest-portable-update.log')
   const script = [
     '@echo off',
+    'setlocal EnableExtensions',
+    '>  "%SH_LOG%" echo [%date% %time%] portable update start',
+    '>> "%SH_LOG%" echo src=%SH_SRC%',
+    '>> "%SH_LOG%" echo dst=%SH_DST%',
+    '>> "%SH_LOG%" echo waiting for app pid %SH_PID% to exit',
+    ':waitpid',
+    'tasklist /fi "PID eq %SH_PID%" | findstr /c:"%SH_PID%" >nul',
+    'if errorlevel 1 goto trymove',
+    'ping -n 2 127.0.0.1 >nul',
+    'goto waitpid',
+    ':trymove',
     'set n=0',
     ':loop',
     'set /a n+=1',
-    'if %n% gtr 60 goto relaunch',
-    `move /y "${src}" "${dst}" >nul 2>&1`,
-    'if errorlevel 1 (',
-    '  ping -n 2 127.0.0.1 >nul',
-    '  goto loop',
-    ')',
-    ':relaunch',
-    `start "" "${dst}"`
+    'move /y "%SH_SRC%" "%SH_DST%" >nul 2>&1',
+    'if not errorlevel 1 goto replaced',
+    'if %n% gtr 60 goto giveup',
+    '>> "%SH_LOG%" echo [%date% %time%] attempt %n% failed',
+    'ping -n 2 127.0.0.1 >nul',
+    'goto loop',
+    ':replaced',
+    '>> "%SH_LOG%" echo [%date% %time%] replaced ok, relaunching',
+    'start "" "%SH_DST%"',
+    'goto end',
+    ':giveup',
+    '>> "%SH_LOG%" echo [%date% %time%] GIVE UP after %n% tries, relaunching existing build',
+    'start "" "%SH_DST%"',
+    ':end',
+    'exit /b 0'
   ].join('\r\n')
-  const batPath = join(app.getPath('temp'), 'streamharvest-portable-update.bat')
   try {
-    writeFileSync(batPath, script)
+    writeFileSync(batPath, script, 'ascii')
   } catch {
     return
   }
-  const child = spawn('cmd.exe', ['/c', `"${batPath}"`], { detached: true, stdio: 'ignore', windowsHide: true })
+  const child = spawn(
+    'cmd.exe',
+    ['/c', `"${batPath}"`],
+    {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: {
+        ...process.env,
+        SH_SRC: src,
+        SH_DST: dst,
+        SH_LOG: logPath,
+        SH_PID: String(process.pid)
+      }
+    }
+  )
   child.unref()
   app.exit(0)
 }
