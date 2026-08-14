@@ -230,6 +230,12 @@ kbd,
   font-size: 13px;
   border-radius: 10px;
 }
+/* .nav-links a would override the button color with the muted link tint —
+   keep the primary button's dark text on the accent gradient, also on hover. */
+.nav-links .nav-cta,
+.nav-links .nav-cta:hover {
+  color: #04101a;
+}
 .nav-toggle {
   display: none;
   background: none;
