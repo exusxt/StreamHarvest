@@ -331,6 +331,15 @@ export function SettingsScreen({
           </Field>
         </div>
         <div className="mt-4">
+          <Field label={t('settings.filenameTemplate')} hint={t('settings.filenameTemplateHint')}>
+            <Input
+              value={settings?.filenameTemplate ?? '%(title)s [%(id)s]'}
+              onChange={(e) => update({ filenameTemplate: e.target.value })}
+              placeholder="%(title)s [%(id)s]"
+            />
+          </Field>
+        </div>
+        <div className="mt-4">
           <Checkbox
             label={t('settings.embedMetadata')}
             hint={t('settings.embedMetadataHint')}

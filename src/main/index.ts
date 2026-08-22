@@ -1,8 +1,8 @@
 // Electron main-process entry point: app lifecycle, the frameless window and
 // the IPC surface that drives the yt-dlp download engine.
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { dirname, join } from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { dirname, join, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { AppStatus, FfmpegCheckResult, YtDlpCheckResult } from '../shared/types'
@@ -237,10 +237,18 @@ function registerIpc(): void {
   ipcMain.handle('win:close', () => mainWindow?.close())
 }
 
-/** Absolute path of the app window icon (icon.ico on Windows, icon.png elsewhere). */
-function windowIconPath(): string {
+/**
+ * Window icon. On Windows the packaged executable already carries the right
+ * icon; handing Electron an `icon` option that resolves inside the asar can
+ * make the taskbar fall back to the default Electron logo, so leave it
+ * undefined there (documented: Windows then uses the executable's icon).
+ * Everywhere else the icon is loaded directly and dropped if it fails.
+ */
+function windowIcon(): Electron.NativeImage | undefined {
+  if (process.platform === 'win32' && app.isPackaged) return undefined
   const name = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
-  return join(app.getAppPath(), 'resources', name)
+  const img = nativeImage.createFromPath(join(app.getAppPath(), 'resources', name))
+  return img.isEmpty() ? undefined : img
 }
 
 function createWindow(): void {
@@ -250,7 +258,7 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 620,
     title: 'StreamHarvest',
-    icon: windowIconPath(),
+    icon: windowIcon(),
     backgroundColor: '#0b1020',
     frame: false,
     show: false,
@@ -263,6 +271,12 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (pendingProtocolUrl) {
+      mainWindow?.webContents.send('protocol:url', pendingProtocolUrl)
+      pendingProtocolUrl = null
+    }
+  })
   mainWindow.on('maximize', () => mainWindow?.webContents.send('win:maximized', true))
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('win:maximized', false))
 
@@ -275,10 +289,14 @@ function createWindow(): void {
   })
   mainWindow.on('minimize', () => {
     if (getSettings().minimizeToTray && !quitting) {
-      mainWindow?.restore()
       mainWindow?.hide()
     }
   })
+  // Tray lifecycle: the tray icon exists only while the window is hidden.
+  mainWindow.on('hide', () => {
+    if (!quitting) trayController?.onWindowHidden()
+  })
+  mainWindow.on('show', () => trayController?.onWindowShown())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
@@ -291,11 +309,86 @@ function createWindow(): void {
   }
 }
 
+/**
+ * Extracts the target download URL from a `streamharvest://` protocol link.
+ * Expected shape: `streamharvest://open?url=<encodeURIComponent(https://…)>`.
+ */
+function protocolTarget(arg: string): string {
+  try {
+    const u = new URL(arg)
+    if (u.protocol !== 'streamharvest:') return ''
+    return u.searchParams.get('url') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Finds a `streamharvest://` link among the OS-provided argv (Windows). */
+function parseProtocolFromArgv(argv: string[]): string {
+  const arg = argv.find((a) => a.startsWith('streamharvest://'))
+  return arg ? protocolTarget(arg) : ''
+}
+
+/** URL received over the protocol that is waiting for the window to load. */
+let pendingProtocolUrl: string | null = null
+
+/**
+ * Registers StreamHarvest as the handler for `streamharvest://` links so the
+ * browser (or any app) can send a download straight to the queue. In dev the
+ * electron binary needs the app path as the first argv element.
+ */
+function registerProtocolClient(): void {
+  try {
+    if (process.defaultApp) {
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('streamharvest', process.execPath, [resolve(process.argv[1])])
+      }
+    } else {
+      app.setAsDefaultProtocolClient('streamharvest')
+    }
+  } catch {
+    // best-effort; packaged installers register the scheme via electron-builder
+  }
+}
+
+/** Focuses the main window and forwards a protocol link to the renderer. */
+function handleProtocolLink(target: string): void {
+  const win = mainWindow
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    // Windows quirk: after hide()/show() the compositor can skip repainting a
+    // frameless window, leaving only the background color. Force a repaint.
+    if (process.platform === 'win32') win.webContents.invalidate()
+  }
+  if (!target) return
+  if (win && win.webContents.isLoading()) pendingProtocolUrl = target
+  else win?.webContents.send('protocol:url', target)
+}
+
+// Single instance: a second launch (e.g. clicking a streamharvest:// link while
+// the app is open) must focus the running window instead of starting a copy.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_e, argv) => {
+    handleProtocolLink(parseProtocolFromArgv(argv))
+  })
+  app.on('open-url', (e, url) => {
+    e.preventDefault()
+    handleProtocolLink(protocolTarget(url))
+  })
+}
+
 app.whenReady().then(async () => {
   // Windows taskbar groups windows by AppUserModelId; setting it explicitly
   // also fixes the "black icon in taskbar" issue with packaged apps.
   if (process.platform === 'win32') app.setAppUserModelId('com.streamharvest.app')
   await loadSettings()
+  registerProtocolClient()
+  pendingProtocolUrl = parseProtocolFromArgv(process.argv)
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
   })
@@ -325,6 +418,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   quitting = true
   hotkeyController?.unregister()
+  trayController?.destroy()
 })
 
 app.on('window-all-closed', () => {

@@ -20,6 +20,7 @@ const DEFAULTS: AppSettings = {
   embedThumbnail: true,
   outputFormat: 'original',
   outputLayout: 'flat',
+  filenameTemplate: '%(title)s [%(id)s]',
   subtitles: false,
   subtitleLangs: 'en',
   embedSubtitles: false,
@@ -33,6 +34,18 @@ const DEFAULTS: AppSettings = {
 }
 
 let settings: AppSettings = { ...DEFAULTS }
+
+/**
+ * Strips characters that would break an output file name (Windows-illegal
+ * separators and control chars) and trims trailing dots/spaces.
+ */
+function sanitizeFilenameTemplate(value: string): string {
+  return value
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '')
+    .replace(/[\s.]+$/g, '')
+    .slice(0, 120)
+    .trim()
+}
 
 function settingsFile(): string {
   return join(app.getPath('userData'), 'settings.json')
@@ -52,6 +65,7 @@ export async function loadSettings(): Promise<void> {
     settings.embedThumbnail = settings.embedThumbnail !== false
     settings.outputFormat = ['original', 'mp4', 'mkv', 'webm'].includes(settings.outputFormat ?? '') ? settings.outputFormat : 'original'
     settings.outputLayout = ['flat', 'site', 'date', 'playlist'].includes(settings.outputLayout ?? '') ? settings.outputLayout : 'flat'
+    settings.filenameTemplate = typeof settings.filenameTemplate === 'string' && settings.filenameTemplate.trim() ? sanitizeFilenameTemplate(settings.filenameTemplate) : DEFAULTS.filenameTemplate
     settings.subtitles = settings.subtitles === true
     settings.embedSubtitles = settings.embedSubtitles === true
     if (typeof settings.subtitleLangs !== 'string' || !settings.subtitleLangs.trim()) settings.subtitleLangs = DEFAULTS.subtitleLangs
@@ -75,6 +89,11 @@ export function getSettings(): AppSettings {
 export async function setSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
   settings = { ...settings, ...patch }
   settings.concurrentLimit = Math.max(1, Math.min(8, Math.floor(settings.concurrentLimit) || 1))
+  if (typeof settings.filenameTemplate === 'string') {
+    settings.filenameTemplate = sanitizeFilenameTemplate(settings.filenameTemplate) || DEFAULTS.filenameTemplate
+  } else {
+    settings.filenameTemplate = DEFAULTS.filenameTemplate
+  }
   try {
     await mkdir(app.getPath('userData'), { recursive: true })
     await writeFile(settingsFile(), JSON.stringify(settings, null, 2), 'utf-8')

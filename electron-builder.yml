@@ -7,6 +7,10 @@ files:
   - out/**
   - package.json
   - resources/**
+protocols:
+  - name: StreamHarvest
+    schemes:
+      - streamharvest
 win:
   target:
     - target: nsis

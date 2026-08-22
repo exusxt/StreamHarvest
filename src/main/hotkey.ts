@@ -42,6 +42,9 @@ export class HotkeyController {
       if (win.isMinimized()) win.restore()
       win.show()
       win.focus()
+      // Windows quirk: after hide()/show() the compositor can skip repainting a
+      // frameless window, leaving only the background color. Force a repaint.
+      if (process.platform === 'win32') win.webContents.invalidate()
     }
     let url = ''
     try {

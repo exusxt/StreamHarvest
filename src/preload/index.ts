@@ -80,6 +80,11 @@ const api = {
     ipcRenderer.on('hotkey:open', listener)
     return () => ipcRenderer.removeListener('hotkey:open', listener)
   },
+  onProtocolUrl: (cb: (url: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, url: string): void => cb(url)
+    ipcRenderer.on('protocol:url', listener)
+    return () => ipcRenderer.removeListener('protocol:url', listener)
+  },
   onYtDlpStatus: (cb: (status: YtDlpStatus) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, status: YtDlpStatus): void => cb(status)
     ipcRenderer.on('dl:ytdlpStatus', listener)

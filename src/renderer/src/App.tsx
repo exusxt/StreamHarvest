@@ -94,6 +94,15 @@ export default function App(): React.JSX.Element {
     return off
   }, [])
 
+  // streamharvest:// protocol links (browser/OS "Open with StreamHarvest").
+  useEffect(() => {
+    const off = window.api.onProtocolUrl((url) => {
+      setScreen('home')
+      setHotUrl(url)
+    })
+    return off
+  }, [])
+
   const onboarded = appSettings?.onboarded ?? true
   const completeOnboarding = (): void => {
     void window.api.setSettings({ onboarded: true })
@@ -180,6 +189,12 @@ export default function App(): React.JSX.Element {
       offClip()
     }
   }, [])
+
+  useEffect(() => {
+    if (update?.state !== 'not-available') return
+    const timer = setTimeout(() => setUpdate(null), 5000)
+    return () => clearTimeout(timer)
+  }, [update])
 
   useEffect(() => {
     applyTheme(theme)
@@ -577,7 +592,7 @@ export default function App(): React.JSX.Element {
         </div>
       </div>
 
-      {update && update.state !== 'not-available' ? (
+      {update ? (
         <div className="pointer-events-none absolute bottom-4 right-4 z-50">
           <UpdateToast state={update} onDismiss={() => setUpdate(null)} />
         </div>

@@ -52,7 +52,8 @@ export const QUALITY_PRESETS: QualityPreset[] = [
   { id: 'best-video', label: 'Best video only (no audio track)', selector: 'bv*' },
   { id: 'best-audio', label: 'Best audio only', selector: 'bestaudio' },
   { id: 'audio-mp3', label: 'Audio only (MP3 192k)', selector: 'bestaudio', extraArgs: ['--extract-audio', '--audio-format', 'mp3', '--audio-quality', '2'] },
-  { id: 'audio-opus', label: 'Audio only (OPUS)', selector: 'bestaudio', extraArgs: ['--extract-audio', '--audio-format', 'opus'] }
+  { id: 'audio-opus', label: 'Audio only (OPUS)', selector: 'bestaudio', extraArgs: ['--extract-audio', '--audio-format', 'opus'] },
+  { id: 'subtitles', label: 'Subtitles only', selector: 'best' }
 ]
 
 /** One entry of a playlist/channel, listed so the user can pick videos. */
@@ -142,6 +143,8 @@ export interface AppSettings {
   outputFormat: OutputFormat
   /** Output folder layout (flat / by site / by date / by playlist). */
   outputLayout: OutputLayout
+  /** yt-dlp output name template (e.g. '%(title)s [%(id)s]'); extension is appended. */
+  filenameTemplate: string
   /** Download subtitle tracks. */
   subtitles: boolean
   /** Comma-separated subtitle language codes, e.g. 'en,de'. */

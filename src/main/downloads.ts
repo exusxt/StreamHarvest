@@ -24,17 +24,18 @@ interface JobOptions {
   playlistItems?: string
 }
 
-/** Resolves a settings value to a yt-dlp `-o` template with subfolder layout. */
-function outputTemplate(layout: OutputLayout): string {
+/** Resolves the yt-dlp `-o` template: optional subfolder layout + file name. */
+function outputTemplate(layout: OutputLayout, template: string): string {
+  const file = `${template}.%(ext)s`
   switch (layout) {
     case 'site':
-      return `%(extractor_key)s/%(title)s [%(id)s].%(ext)s`
+      return `%(extractor_key)s/${file}`
     case 'date':
-      return `%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s].%(ext)s`
+      return `%(upload_date>%Y-%m-%d)s/${file}`
     case 'playlist':
-      return `%(playlist_title|Video)s/%(title)s [%(id)s].%(ext)s`
+      return `%(playlist_title|Video)s/${file}`
     default:
-      return `%(title)s [%(id)s].%(ext)s`
+      return file
   }
 }
 
@@ -377,9 +378,12 @@ export class DownloadManager {
     if (!bin) return
     const opts = this.options.get(job.id) ?? { presetId: 'best', playlist: false }
     const preset = QUALITY_PRESETS.find((p) => p.id === opts.presetId) ?? QUALITY_PRESETS[0]
-    const selector = opts.formatId ? `${opts.formatId}+bestaudio/best` : preset.selector
+    const subOnly = preset.id === 'subtitles'
+    const selector = subOnly ? 'best' : opts.formatId ? `${opts.formatId}+bestaudio/best` : preset.selector
     const settings = this.getSettings()
-    const template = outputTemplate(settings.outputLayout)
+    // Playlist downloads always land in a subfolder named after the playlist,
+    // regardless of the configured folder layout (single videos keep it).
+    const template = outputTemplate(opts.playlist ? 'playlist' : settings.outputLayout, settings.filenameTemplate)
     const args = ['--newline', '--no-warnings', '-f', selector, '-o', join(settings.downloadsDir, template)]
     const managedFfmpeg = ffmpegManagedPath()
     if (managedFfmpeg) args.push('--ffmpeg-location', ffmpegStoreDir())
@@ -388,17 +392,20 @@ export class DownloadManager {
     if (opts.playlist && opts.playlistItems) args.push('--playlist-items', opts.playlistItems)
 
     // Phase 3 media quality flags. ffmpeg-only features are gated on an actual
-    // ffmpeg being present so downloads without ffmpeg keep working.
-    if (ffmpegAvailableSync()) {
+    // ffmpeg being present so downloads without ffmpeg keep working. Subtitle-
+    // only jobs skip all media post-processing.
+    if (ffmpegAvailableSync() && !subOnly) {
       if (settings.embedMetadata) args.push('--embed-metadata')
       if (settings.embedThumbnail) args.push('--embed-thumbnail')
       const remux = remuxExtension(settings.outputFormat)
       if (remux && !preset.extraArgs?.includes('--extract-audio')) args.push('--remux-video', remux)
       if (settings.embedSubtitles && settings.subtitles) args.push('--embed-subs')
     }
-    if (settings.subtitles) {
-      const langs = settings.subtitleLangs.trim().replace(/\s+/g, '') || 'en'
-      args.push('--write-subs', '--sub-langs', langs, '--sub-format', 'best')
+    const subtitleLangs = settings.subtitleLangs.trim().replace(/\s+/g, '') || 'en'
+    if (subOnly) {
+      args.push('--skip-download', '--write-subs', '--sub-langs', subtitleLangs, '--sub-format', 'best')
+    } else if (settings.subtitles) {
+      args.push('--write-subs', '--sub-langs', subtitleLangs, '--sub-format', 'best')
     }
 
     // Phase 4 network flags.

@@ -21,16 +21,31 @@ export class TrayController {
 
   /** Creates or removes the tray icon to match the minimizeToTray setting. */
   sync(): void {
-    if (this.getSettings().minimizeToTray && !this.tray) {
-      this.create()
-    } else if (!this.getSettings().minimizeToTray && this.tray) {
+    if (!this.getSettings().minimizeToTray) {
       this.destroy()
+      return
     }
+    const win = this.getWindow()
+    if (win && !win.isVisible()) this.ensureCreated()
+  }
+
+  /** Called when the window is hidden (tray mode): show the tray icon. */
+  onWindowHidden(): void {
+    if (this.getSettings().minimizeToTray) this.ensureCreated()
+  }
+
+  /** Called when the window becomes visible again: remove the tray icon. */
+  onWindowShown(): void {
+    this.destroy()
   }
 
   destroy(): void {
     this.tray?.destroy()
     this.tray = null
+  }
+
+  private ensureCreated(): void {
+    if (!this.tray) this.create()
   }
 
   private create(): void {
@@ -47,8 +62,9 @@ export class TrayController {
       tray.setContextMenu(menu)
       tray.on('click', () => this.show())
     } else {
-      // On Windows a left click pops the menu up and a double-click restores.
-      tray.on('click', () => tray.popUpContextMenu(menu))
+      // On Windows a left click focuses the window and a right click opens the menu.
+      tray.on('click', () => this.show())
+      tray.on('right-click', () => tray.popUpContextMenu(menu))
       tray.on('double-click', () => this.show())
     }
     this.tray = tray
@@ -60,5 +76,8 @@ export class TrayController {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
+    // Windows quirk: after hide()/show() the compositor can skip repainting a
+    // frameless window, leaving only the background color. Force a repaint.
+    if (process.platform === 'win32') win.webContents.invalidate()
   }
 }

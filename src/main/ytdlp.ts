@@ -140,6 +140,48 @@ export async function ffmpegPresent(): Promise<boolean> {
 }
 
 const MAX_REDIRECTS = 10
+const MAX_ATTEMPTS = 4
+const RETRY_DELAY_MS = 1000
+
+/** Errors that are worth retrying once. The transfer is resumed, not restarted. */
+export function isRetryable(err: Error): boolean {
+  const m = err.message
+  return (
+    m.includes('aborted') ||
+    m.includes('premature close') ||
+    m.includes('ECONNRESET') ||
+    m.includes('socket hang up') ||
+    m.includes('ETIMEDOUT') ||
+    m.includes('ECONNREFUSED') ||
+    m.includes('EAI_AGAIN') ||
+    m.includes('ENOTFOUND') ||
+    m.includes('EPIPE') ||
+    m.includes('request timed out')
+  )
+}
+
+/** GET that follows redirects and resolves with the final response. */
+function requestOnce(url: string, headers: Record<string, string>, family: number | undefined, redirects: number): Promise<http.IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https:') ? https : http
+    const opts: http.RequestOptions = { headers, ...(family ? { family } : {}) }
+    const req = mod.get(url, opts, (res) => {
+      const status = res.statusCode ?? 0
+      if (status >= 300 && status < 400 && res.headers.location) {
+        res.resume()
+        if (redirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        resolve(requestOnce(new URL(res.headers.location, url).toString(), headers, family, redirects - 1))
+        return
+      }
+      resolve(res)
+    })
+    req.on('error', reject)
+    req.setTimeout(60000, () => req.destroy(new Error('Request timed out')))
+  })
+}
 
 /** Downloads a URL to a file with progress callbacks, following redirects. */
 export function downloadToFile(
@@ -147,72 +189,119 @@ export function downloadToFile(
   destPath: string,
   opts: { onProgress?: (p: BinaryProgress) => void; headers?: Record<string, string> }
 ): Promise<void> {
+  const baseHeaders: Record<string, string> = { Accept: '*/*', ...(opts.headers ?? {}) }
   return new Promise((resolve, reject) => {
-    const headers: Record<string, string> = { Accept: '*/*', ...(opts.headers ?? {}) }
-    const get = (u: string, redirects: number): void => {
-      const mod = u.startsWith('https:') ? https : http
-      const req = mod.get(u, { headers }, (res) => {
-        const status = res.statusCode ?? 0
-        if (status >= 300 && status < 400 && res.headers.location) {
-          res.resume()
-          if (redirects <= 0) {
-            reject(new Error('Too many redirects'))
+    let attempt = 0
+    // Bytes already persisted to disk; the next attempt resumes from here.
+    let resumeFrom = 0
+
+    const run = (): void => {
+      const headers = { ...baseHeaders }
+      if (resumeFrom > 0) headers['Range'] = `bytes=${resumeFrom}-`
+      // Broken IPv6 routes can reset connections; retries fall back to IPv4.
+      const family = attempt > 0 ? 4 : undefined
+      requestOnce(url, headers, family, MAX_REDIRECTS)
+        .then((res) => {
+          const status = res.statusCode ?? 0
+          if (status === 416) {
+            // Range not satisfiable: the file is already complete.
+            res.resume()
+            resolve()
             return
           }
-          get(new URL(res.headers.location, u).toString(), redirects - 1)
-          return
-        }
-        if (status >= 400) {
-          res.resume()
-          reject(new Error(`HTTP ${status} for ${u}`))
-          return
-        }
-        const total = Number(res.headers['content-length'] ?? 0)
-        let received = 0
-        void mkdir(dirname(destPath), { recursive: true })
-          .then(() => {
-            const stream = createWriteStream(destPath)
-            res.on('data', (chunk: Buffer) => {
-              received += chunk.length
-              opts.onProgress?.({ received, total })
-            })
-            res.pipe(stream)
-            stream.on('finish', () => resolve())
-            stream.on('error', reject)
-            res.on('error', reject)
-          })
-          .catch(reject)
-      })
-      req.on('error', reject)
-      req.setTimeout(60000, () => req.destroy(new Error('Request timed out')))
+          if (status >= 400) {
+            res.resume()
+            reject(new Error(`HTTP ${status} for ${url}`))
+            return
+          }
+          const partial = status === 206
+          const chunkTotal = Number(res.headers['content-length'] ?? 0)
+          const total = partial ? resumeFrom + chunkTotal : chunkTotal
+          return mkdir(dirname(destPath), { recursive: true })
+            .then(
+              () =>
+                new Promise<void>((done, fail) => {
+                  const stream = createWriteStream(destPath, { flags: partial ? 'a' : 'w' })
+                  let settled = false
+                  let resEnded = false
+                  const failWith = (e: Error): void => {
+                    if (settled) return
+                    settled = true
+                    resumeFrom = stream.bytesWritten
+                    stream.destroy()
+                    res.destroy()
+                    fail(e)
+                  }
+                  const doneOnce = (): void => {
+                    if (settled) return
+                    settled = true
+                    resumeFrom = 0
+                    done()
+                  }
+                  res.on('data', (c: Buffer) => {
+                    opts.onProgress?.({ received: (partial ? resumeFrom : 0) + stream.bytesWritten + c.length, total })
+                  })
+                  res.on('end', () => {
+                    resEnded = true
+                  })
+                  res.pipe(stream)
+                  stream.on('finish', doneOnce)
+                  stream.on('error', failWith)
+                  res.on('error', failWith)
+                  res.on('close', () => {
+                    // Connection closed before the body ended (socket hang up).
+                    if (!resEnded) failWith(new Error('socket hang up'))
+                  })
+                })
+            )
+            .then(() => resolve())
+        })
+        .catch((e) => {
+          attempt++
+          if (attempt < MAX_ATTEMPTS && isRetryable(e)) {
+            setTimeout(run, RETRY_DELAY_MS * attempt)
+          } else {
+            reject(e)
+          }
+        })
     }
-    get(url, MAX_REDIRECTS)
+    run()
   })
 }
 
 /** Simple GET returning the response body as a string. */
-export function httpGet(url: string, headers: Record<string, string>): Promise<string> {
+export function httpGet(url: string, headers: Record<string, string>, attempts = 3): Promise<string> {
   return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https:') ? https : http
-    const req = mod.get(url, { headers }, (res) => {
-      const status = res.statusCode ?? 0
-      if (status >= 300 && status < 400 && res.headers.location) {
-        res.resume()
-        httpGet(new URL(res.headers.location, url).toString(), headers).then(resolve, reject)
-        return
-      }
-      if (status >= 400) {
-        res.resume()
-        reject(new Error(`HTTP ${status} for ${url}`))
-        return
-      }
-      const chunks: Buffer[] = []
-      res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
-      res.on('error', reject)
-    })
-    req.on('error', reject)
-    req.setTimeout(30000, () => req.destroy(new Error('Request timed out')))
+    const tryOnce = (left: number, family?: number): void => {
+      const mod = url.startsWith('https:') ? https : http
+      const opts: http.RequestOptions = { headers, ...(family ? { family } : {}) }
+      const req = mod.get(url, opts, (res) => {
+        const status = res.statusCode ?? 0
+        if (status >= 300 && status < 400 && res.headers.location) {
+          res.resume()
+          httpGet(new URL(res.headers.location, url).toString(), headers, attempts).then(resolve, reject)
+          return
+        }
+        if (status >= 400) {
+          res.resume()
+          reject(new Error(`HTTP ${status} for ${url}`))
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+        res.on('error', (e) => {
+          if (left > 1 && isRetryable(e)) setTimeout(() => tryOnce(left - 1, 4), RETRY_DELAY_MS)
+          else reject(e)
+        })
+      })
+      req.on('error', (e) => {
+        if (left > 1 && isRetryable(e)) setTimeout(() => tryOnce(left - 1, 4), RETRY_DELAY_MS)
+        else reject(e)
+      })
+      req.setTimeout(30000, () => req.destroy(new Error('Request timed out')))
+    }
+    tryOnce(attempts)
   })
 }
 

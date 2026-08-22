@@ -29,6 +29,8 @@ export function UpdateToast({
         return t('updates.downloaded', { version: state.version ?? '' })
       case 'error':
         return t('updates.failed')
+      case 'not-available':
+        return t('updates.upToDate')
       default:
         return ''
     }
@@ -40,7 +42,7 @@ export function UpdateToast({
         <div className="mt-0.5 shrink-0">
           {state.state === 'checking' || state.state === 'available' || state.state === 'downloading' ? (
             <Spinner />
-          ) : state.state === 'downloaded' ? (
+          ) : state.state === 'downloaded' || state.state === 'not-available' ? (
             <span className="text-sc64-good">✓</span>
           ) : (
             <span className="text-sc64-bad">!</span>
