@@ -457,6 +457,15 @@ export function SettingsScreen({
                 </p>
               )
             ) : null}
+
+            <div className="mt-4">
+              <Checkbox
+                label={t('settings.autoUpdateEngine')}
+                hint={t('settings.autoUpdateEngineHint')}
+                checked={settings?.autoUpdateEngine ?? true}
+                onChange={(v) => update({ autoUpdateEngine: v })}
+              />
+            </div>
           </div>
 
           <div className="border-t border-sc64-border pt-5">

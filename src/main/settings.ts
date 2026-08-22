@@ -15,6 +15,7 @@ const DEFAULTS: AppSettings = {
   audioOnly: false,
   clipboardMonitor: true,
   minimizeToTray: false,
+  autoUpdateEngine: true,
   notifications: true,
   embedMetadata: true,
   embedThumbnail: true,
@@ -60,6 +61,7 @@ export async function loadSettings(): Promise<void> {
     if (typeof settings.downloadsDir !== 'string' || !settings.downloadsDir) settings.downloadsDir = DEFAULTS.downloadsDir
     settings.clipboardMonitor = settings.clipboardMonitor !== false
     settings.minimizeToTray = settings.minimizeToTray === true
+    settings.autoUpdateEngine = settings.autoUpdateEngine !== false
     settings.notifications = settings.notifications !== false
     settings.embedMetadata = settings.embedMetadata !== false
     settings.embedThumbnail = settings.embedThumbnail !== false

@@ -1,7 +1,7 @@
 // Electron main-process entry point: app lifecycle, the frameless window and
 // the IPC surface that drives the yt-dlp download engine.
 
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
 import { dirname, join, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -14,7 +14,7 @@ import { TrayController } from './tray'
 import { HotkeyController } from './hotkey'
 import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
-import { downloadYtDlp, latestReleaseTag, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
+import { downloadYtDlp, latestReleaseTag, ytDlpBinaryPath, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
 import { checkForUpdates, initUpdater, installUpdate } from './updater'
 
 let mainWindow: BrowserWindow | null = null
@@ -23,6 +23,82 @@ let clipboardMonitor: ClipboardMonitor | null = null
 let trayController: TrayController | null = null
 let hotkeyController: HotkeyController | null = null
 let quitting = false
+
+// --- yt-dlp background auto-update ------------------------------------------
+// yt-dlp breaks whenever a site changes its extraction logic and upstream
+// ships fixes near-daily, so the managed binary is kept fresh automatically:
+// check GitHub shortly after launch, then once a day. Newer releases install
+// silently while no download runs (Windows locks a running .exe, so updates
+// wait for an idle queue). Network failures retry hourly instead of waiting.
+
+const ENGINE_FIRST_CHECK_MS = 45 * 1000
+const ENGINE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+const ENGINE_RETRY_MS = 60 * 60 * 1000
+
+let engineTimer: NodeJS.Timeout | null = null
+let engineOpBusy = false
+
+/** Serializes engine binary operations between auto-update and manual IPC. */
+function acquireEngineLock(): boolean {
+  if (engineOpBusy) return false
+  engineOpBusy = true
+  return true
+}
+
+function releaseEngineLock(): void {
+  engineOpBusy = false
+}
+
+function scheduleEngineUpdate(delayMs: number): void {
+  if (engineTimer) clearTimeout(engineTimer)
+  engineTimer = setTimeout(() => {
+    engineTimer = null
+    void runAutoEngineUpdate()
+  }, delayMs)
+}
+
+/** Runs one auto-update pass and reschedules itself. */
+async function runAutoEngineUpdate(): Promise<void> {
+  let nextDelay = ENGINE_CHECK_INTERVAL_MS
+  try {
+    const s = getSettings()
+    const bin = ytDlpPath()
+    // No managed binary yet → first-run install stays user-driven.
+    if (s.autoUpdateEngine && bin && !(manager?.busy ?? false) && acquireEngineLock()) {
+      try {
+        const current = await ytDlpVersion(bin)
+        const latestRaw = await latestReleaseTag()
+        if (!latestRaw) {
+          nextDelay = ENGINE_RETRY_MS
+        } else {
+          const latest = latestRaw.replace(/^v/, '')
+          if (current && versionLess(current, latest)) {
+            await downloadYtDlp(() => {}, () => {})
+            const version = await ytDlpVersion(ytDlpBinaryPath())
+            mainWindow?.webContents.send('dl:ytdlpStatus', { present: true, version, busy: false, message: null })
+            if (version && s.notifications && Notification.isSupported()) {
+              try {
+                new Notification({
+                  title: 'StreamHarvest',
+                  body: translate(s.language, 'engine.ytdlpUpdated', { version }),
+                  silent: false
+                }).show()
+              } catch {
+                // notifications are best-effort
+              }
+            }
+          }
+        }
+      } finally {
+        releaseEngineLock()
+      }
+    }
+  } catch {
+    // Download/network failure — retry sooner than the next daily tick.
+    nextDelay = ENGINE_RETRY_MS
+  }
+  scheduleEngineUpdate(nextDelay)
+}
 
 function registerIpc(): void {
   // App basics.
@@ -125,6 +201,7 @@ function registerIpc(): void {
   // yt-dlp binary management. Install/update stream progress + status to the
   // renderer and refresh the status snapshot when done.
   ipcMain.handle('ytdlp:install', async () => {
+    if (!acquireEngineLock()) return { ok: false, message: translate(getSettings().language, 'engine.busy'), version: null }
     const send = (channel: string, payload: unknown): void => {
       mainWindow?.webContents.send(channel, payload)
     }
@@ -141,10 +218,13 @@ function registerIpc(): void {
     } catch (e) {
       send('dl:ytdlpStatus', { present: ytDlpPath() !== null, version: null, busy: false, message: e instanceof Error ? e.message : String(e) })
       return { ok: false, message: e instanceof Error ? e.message : String(e), version: null }
+    } finally {
+      releaseEngineLock()
     }
   })
 
   ipcMain.handle('ytdlp:update', async () => {
+    if (!acquireEngineLock()) return { ok: false, message: translate(getSettings().language, 'engine.busy'), version: null }
     const send = (channel: string, payload: unknown): void => {
       mainWindow?.webContents.send(channel, payload)
     }
@@ -161,6 +241,8 @@ function registerIpc(): void {
     } catch (e) {
       send('dl:ytdlpStatus', { present: ytDlpPath() !== null, version: null, busy: false, message: e instanceof Error ? e.message : String(e) })
       return { ok: false, message: e instanceof Error ? e.message : String(e), version: null }
+    } finally {
+      releaseEngineLock()
     }
   })
 
@@ -406,6 +488,8 @@ app.whenReady().then(async () => {
   registerIpc()
   createWindow()
   initUpdater(mainWindow!)
+  // Keep the yt-dlp engine fresh: first background check shortly after launch.
+  scheduleEngineUpdate(ENGINE_FIRST_CHECK_MS)
   // Check for app updates on startup (packaged only), after the window settles.
   if (app.isPackaged) {
     setTimeout(() => checkForUpdates(), 3000)

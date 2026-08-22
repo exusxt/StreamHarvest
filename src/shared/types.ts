@@ -133,6 +133,8 @@ export interface AppSettings {
   clipboardMonitor: boolean
   /** Hide to the system tray instead of closing/minimizing. */
   minimizeToTray: boolean
+  /** Auto-update the managed yt-dlp engine in the background (daily check). */
+  autoUpdateEngine: boolean
   /** Show OS notifications when downloads finish or fail. */
   notifications: boolean
   /** Embed metadata (title, artist, description) into the file. */

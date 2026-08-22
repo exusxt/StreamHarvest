@@ -138,6 +138,11 @@ export class DownloadManager {
   private partFiles = new Map<string, string>()
   private fileCandidates = new Map<string, string[]>()
   private activeCount = 0
+
+  /** True while any job is queued/downloading (blocks engine self-update on Windows). */
+  get busy(): boolean {
+    return this.activeCount > 0
+  }
   /** Ordered ids of queued jobs, oldest first — the visible download queue. */
   private order: string[] = []
 
