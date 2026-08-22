@@ -128,6 +128,106 @@ function buildThemePicker() {
   applyTheme(activeTheme);
 }
 
+/* Interactive app preview: screen switching (sidebar + tabs below window). */
+function initPreviewScreens() {
+  const sideItems = document.querySelectorAll(".app-side .s-item");
+  const tabs = document.querySelectorAll(".demo-tabs .dtab");
+  const screens = document.querySelectorAll(".screen");
+  if (!screens.length) return;
+  const go = (id) => {
+    screens.forEach((s) => s.classList.toggle("active", s.dataset.screen === id));
+    sideItems.forEach((b) => b.classList.toggle("active", b.dataset.screen === id));
+    tabs.forEach((b) => b.classList.toggle("active", b.dataset.screen === id));
+  };
+  document.querySelectorAll("[data-screen]").forEach((el) => {
+    if (el.classList.contains("screen")) return;
+    el.addEventListener("click", () => go(el.dataset.screen));
+  });
+}
+
+/* Titlebar Theme dropdown — same list as the in-app menu. */
+function initTitlebarTheme() {
+  const menu = document.getElementById("titlebarTheme");
+  if (!menu) return;
+  const btn = menu.querySelector(".t-menu-btn");
+  const pop = menu.querySelector(".t-menu-pop");
+  function renderPop() {
+    pop.innerHTML = "";
+    THEMES.forEach((theme) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      if (theme.id === activeTheme) item.classList.add("on");
+      item.innerHTML =
+        "<span>" + theme.name + "</span>" + (theme.id === activeTheme ? '<span>✓</span>' : "");
+      item.addEventListener("click", () => {
+        applyTheme(theme.id);
+        menu.classList.remove("open");
+        renderPop();
+      });
+      pop.appendChild(item);
+    });
+  }
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    renderPop();
+    menu.classList.toggle("open");
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target)) menu.classList.remove("open");
+  });
+}
+
+/* Mini theme swatches inside the preview's Settings screen. */
+function initMiniThemes() {
+  const wrap = document.querySelector(".mini-themes");
+  if (!wrap) return;
+  wrap.querySelectorAll("button[data-theme]").forEach((b) => {
+    const theme = THEMES.find((t) => t.id === b.dataset.theme);
+    if (!theme) return;
+    b.style.background =
+      "linear-gradient(135deg," +
+      theme.vars["--sc64-deep"] + " 20%," +
+      theme.vars["--sc64-accent"] + ")";
+    b.title = theme.name;
+    b.addEventListener("click", () => {
+      applyTheme(theme.id);
+      wrap.querySelectorAll("button").forEach((x) =>
+        x.classList.toggle("on", x.dataset.theme === activeTheme)
+      );
+    });
+  });
+  document.addEventListener("click", () => {
+    wrap.querySelectorAll("button").forEach((x) =>
+      x.classList.toggle("on", x.dataset.theme === activeTheme)
+    );
+  });
+}
+
+/* Fake live progress so the Downloads screen feels alive. */
+function initFakeProgress() {
+  const bars = [
+    { el: document.getElementById("bar1"), label: document.getElementById("pv1"), v: 72, max: 98 },
+    { el: document.getElementById("bar2"), label: document.getElementById("pv2"), v: 38, max: 95 }
+  ].filter((b) => b.el && b.label);
+  if (!bars.length) return;
+  setInterval(() => {
+    let allDone = true;
+    bars.forEach((b) => {
+      if (b.v < b.max) {
+        b.v = Math.min(b.max, b.v + Math.random() * 2);
+        allDone = false;
+      }
+    });
+    bars.forEach((b) => {
+      b.el.style.width = b.v + "%";
+      b.label.textContent = Math.round(b.v) + "%";
+    });
+    if (allDone) {
+      bars.forEach((b) => (b.v = 8));
+    }
+  }, 2200);
+}
+
 /* Mobile nav. */
 const toggle = document.querySelector(".nav-toggle");
 const navLinks = document.getElementById("navLinks");
@@ -170,3 +270,7 @@ document.querySelectorAll(".faq-item").forEach((item) => {
 });
 
 buildThemePicker();
+initPreviewScreens();
+initTitlebarTheme();
+initMiniThemes();
+initFakeProgress();

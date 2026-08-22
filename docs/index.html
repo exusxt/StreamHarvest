@@ -55,7 +55,7 @@
       <section class="hero">
         <div class="wrap">
           <span class="chip hero-badge">
-            <b>v0.4.0</b> · YouTube · Vimeo · Twitch · hundreds more
+              <b>v0.5.0</b> · YouTube · Vimeo · Twitch · hundreds more
           </span>
           <h1>
             Download videos from<br />
@@ -96,67 +96,187 @@
           </div>
 
           <div class="shot-card">
-            <div class="app-window">
+            <div class="app-window" id="appWindow">
+              <!-- Frameless title bar, mirrors src/renderer/src/components/TitleBar.tsx -->
               <div class="titlebar">
-                <div class="dots">
-                  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                <img class="t-icon" src="assets/icon.png" alt="" width="20" height="20" />
+                <span class="t-name">StreamHarvest</span>
+                <span class="t-ver">v0.5.0</span>
+                <div class="t-menu" id="titlebarTheme">
+                  <button class="t-menu-btn" type="button">Theme</button>
+                  <div class="t-menu-pop"></div>
                 </div>
-                <span class="t-title">StreamHarvest</span>
+                <span class="t-spacer"></span>
+                <div class="t-controls">
+                  <button type="button" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="5.5" width="10" height="1" fill="currentColor"/></svg></button>
+                  <button type="button" aria-label="Maximize"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="9" height="9" stroke="currentColor"/></svg></button>
+                  <button type="button" class="t-close" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.2"/></svg></button>
+                </div>
               </div>
+
               <div class="app-body">
-                <div class="app-side">
-                  <div class="s-item active">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    Home
-                  </div>
-                  <div class="s-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                    Downloads
-                  </div>
-                  <div class="s-item">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    Settings
-                  </div>
-                </div>
+                <!-- Sidebar, mirrors Sidebar.tsx -->
+                <nav class="app-side">
+                  <button class="s-item active" type="button" data-screen="home">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+                    <span>Home</span>
+                  </button>
+                  <button class="s-item" type="button" data-screen="downloads">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+                    <span>Downloads</span>
+                  </button>
+                  <button class="s-item" type="button" data-screen="settings">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span>Settings</span>
+                  </button>
+                  <span class="s-version">v0.5.0 · MIT</span>
+                </nav>
+
                 <div class="app-main">
-                  <div class="mock-row">
-                    <div class="mock-input">https://www.youtube.com/watch?v=…</div>
-                    <div class="mock-select">Best available</div>
-                    <a class="btn btn-primary" style="padding:11px 18px;font-size:13px">Download</a>
-                  </div>
-                  <div class="mock-dl">
-                    <div class="mock-thumb"></div>
-                    <div class="mock-meta">
-                      <div class="m-name">City Lights at Night — 4K</div>
-                      <div class="m-sub"><span>1080p · MP4 · 98%</span><span>12.4 MB/s · 0:04</span></div>
-                      <div class="mock-bar"><i style="width:98%"></i></div>
+                  <!-- Header, mirrors Header.tsx -->
+                  <div class="app-header">
+                    <div class="ah-id">
+                      <img src="assets/icon.png" alt="" width="40" height="40" />
+                      <div>
+                        <strong>StreamHarvest</strong>
+                        <small>Download videos from anywhere</small>
+                      </div>
                     </div>
-                    <div class="mock-status">active</div>
-                  </div>
-                  <div class="mock-dl">
-                    <div class="mock-thumb"></div>
-                    <div class="mock-meta">
-                      <div class="m-name">Documentary: How It&apos;s Made</div>
-                      <div class="m-sub"><span>720p · MP4 · 61%</span><span>8.1 MB/s · 0:37</span></div>
-                      <div class="mock-bar"><i style="width:61%"></i></div>
+                    <div class="ah-badges">
+                      <span class="abadge good"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>yt-dlp 2026.08.21</span>
+                      <span class="abadge good"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ffmpeg 8.0</span>
+                      <span class="abadge accent" id="activeBadge">2 active</span>
+                      <span class="arefresh"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Refresh</span>
                     </div>
-                    <div class="mock-status">active</div>
                   </div>
-                  <div class="mock-dl">
-                    <div class="mock-thumb"></div>
-                    <div class="mock-meta">
-                      <div class="m-name">Podcast Episode 42 — Interview</div>
-                      <div class="m-sub"><span>MP3 · 320kbps · done</span><span>6.2 MB</span></div>
-                      <div class="mock-bar"><i style="width:100%"></i></div>
+
+                  <!-- HOME screen -->
+                  <div class="screen active" data-screen="home">
+                    <div class="apanel">
+                      <div class="apanel-title">
+                        <svg class="accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+                        New download
+                      </div>
+                      <div class="fetch-row">
+                        <span class="mock-input">https://www.youtube.com/watch?v=aqz-KE-bpKQ</span>
+                        <span class="btn btn-primary demo-btn">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          Fetch info
+                        </span>
+                      </div>
+                      <div class="saved-line"><span class="dot"></span>Saved to C:\Users\you\Downloads\StreamHarvest</div>
                     </div>
-                    <div class="mock-status">done</div>
+
+                    <div class="apanel meta-panel">
+                      <div class="meta-row">
+                        <div class="meta-thumb">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                          <i class="dur-chip">10:34</i>
+                        </div>
+                        <div class="meta-info">
+                          <span class="abadge accent">Video</span>
+                          <div class="m-name">Big Buck Bunny — 4K Open Movie</div>
+                          <div class="meta-sub">
+                            <span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Blender Foundation</span>
+                            <span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 10:34</span>
+                            <span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> 24 formats</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="quality-row">
+                        <span class="mock-select">
+                          Best available
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                        </span>
+                        <span class="btn btn-primary demo-btn">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                          Download
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- DOWNLOADS screen -->
+                  <div class="screen" data-screen="downloads">
+                    <div class="mock-dl">
+                      <div class="mock-thumb big"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">Big Buck Bunny — 4K Open Movie</div>
+                        <div class="m-sub"><span>2160p · MP4 · <b class="pv" id="pv1">72%</b></span><span>11.2 MB/s · ETA 0:41</span></div>
+                        <div class="mock-bar"><i style="width:72%" id="bar1"></i></div>
+                      </div>
+                      <span class="pill pill-accent">downloading</span>
+                    </div>
+                    <div class="mock-dl">
+                      <div class="mock-thumb alt"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">Synthwave Mix 2026 — Full Album</div>
+                        <div class="m-sub"><span>MP3 · 320 kbps · <b class="pv" id="pv2">38%</b></span><span>4.8 MB/s · ETA 1:12</span></div>
+                        <div class="mock-bar"><i style="width:38%" id="bar2"></i></div>
+                      </div>
+                      <span class="pill pill-accent">downloading</span>
+                    </div>
+                    <div class="mock-dl">
+                      <div class="mock-thumb deep"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">The Deep Sea — Documentary</div>
+                        <div class="m-sub"><span>1080p · MKV · subtitles embedded</span><span>1.2 GB</span></div>
+                        <div class="mock-bar"><i style="width:100%" class="full"></i></div>
+                      </div>
+                      <span class="pill pill-good">done</span>
+                    </div>
+                    <div class="queue-note">Queue: 2 running · 1 waiting · parallel limit 2</div>
+                  </div>
+
+                  <!-- SETTINGS screen -->
+                  <div class="screen settings-grid" data-screen="settings">
+                    <div class="apanel tight">
+                      <div class="apanel-title small">General</div>
+                      <label class="check-row on"><span class="box"></span>Clipboard monitoring</label>
+                      <label class="check-row"><span class="box"></span>Audio only (MP3)</label>
+                      <label class="check-row on"><span class="box"></span>Minimize to tray</label>
+                    </div>
+                    <div class="apanel tight">
+                      <div class="apanel-title small">Appearance</div>
+                      <div class="mini-themes">
+                        <button type="button" data-theme="gallery" class="on"></button>
+                        <button type="button" data-theme="galleryblue"></button>
+                        <button type="button" data-theme="gallerypurple"></button>
+                        <button type="button" data-theme="midnight"></button>
+                        <button type="button" data-theme="ocean"></button>
+                        <button type="button" data-theme="forest"></button>
+                        <button type="button" data-theme="sunset"></button>
+                        <button type="button" data-theme="candy"></button>
+                      </div>
+                      <div class="tiny-note">14 themes · live preview</div>
+                    </div>
+                    <div class="apanel tight">
+                      <div class="apanel-title small">Engine</div>
+                      <div class="engine-badges">
+                        <span class="abadge good">yt-dlp 2026.08.21</span>
+                        <span class="abadge good">ffmpeg 8.0</span>
+                      </div>
+                      <div class="engine-actions">
+                        <span class="ademo-btn outline">Update</span>
+                        <span class="ademo-btn ghost">Check for updates</span>
+                      </div>
+                      <div class="tiny-note ok"><span class="dot"></span>Auto-update keeps yt-dlp fresh</div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div class="demo-tabs" role="tablist" aria-label="Preview screens">
+              <button type="button" class="dtab active" data-screen="home">Home</button>
+              <button type="button" class="dtab" data-screen="downloads">Downloads</button>
+              <button type="button" class="dtab" data-screen="settings">Settings</button>
+              <span class="hint">interactive preview — click around</span>
+            </div>
+
             <span class="float-chip fc-1"><span class="dot"></span>1080p · MP4 ready</span>
-            <span class="float-chip fc-2"><span class="dot"></span>12.4 MB/s</span>
-            <span class="float-chip fc-3"><span class="dot"></span>3 downloads running</span>
+            <span class="float-chip fc-2"><span class="dot"></span>11.2 MB/s</span>
+            <span class="float-chip fc-3"><span class="dot"></span>yt-dlp auto-updated</span>
           </div>
         </div>
       </section>
