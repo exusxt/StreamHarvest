@@ -34,6 +34,22 @@ export function ffmpegPath(): string | null {
   return existsSync(managed) ? managed : null
 }
 
+/** Folder-relative name of the ffprobe binary on each platform. */
+export function ffprobeExeName(): string {
+  return process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
+}
+
+/** Absolute path of the managed ffprobe binary, regardless of existence. */
+export function ffprobeManagedPath(): string {
+  return join(ffmpegStoreDir(), ffprobeExeName())
+}
+
+/** Absolute path to the managed ffprobe binary, or null when not installed. */
+export function ffprobePath(): string | null {
+  const probe = ffprobeManagedPath()
+  return existsSync(probe) ? probe : null
+}
+
 /** Runs `ffmpeg -version` and resolves the raw version token, or null. */
 export async function ffmpegVersion(bin: string): Promise<string | null> {
   try {
@@ -137,11 +153,22 @@ export async function downloadFfmpeg(onProgress: (p: BinaryProgress) => void, on
   if (!found) throw new Error('Could not locate ffmpeg inside the downloaded archive.')
   await rm(dest, { force: true })
   await rename(found, dest)
+  // yt-dlp's postprocessing needs ffprobe as well — install it next to ffmpeg
+  // so --ffmpeg-location <dir> resolves every helper binary.
+  const probeSrc = await findFile(extractDir, ffprobeExeName())
+  let probeInstalled = false
+  if (probeSrc) {
+    const probeDest = ffprobeManagedPath()
+    await rm(probeDest, { force: true })
+    await rename(probeSrc, probeDest)
+    probeInstalled = true
+  }
   if (process.platform !== 'win32') {
-    // Make the binary executable on unix-like systems.
+    // Make the binaries executable on unix-like systems.
     try {
       const { chmod } = await import('node:fs/promises')
       await chmod(dest, 0o755)
+      if (probeInstalled) await chmod(ffprobeManagedPath(), 0o755)
     } catch {
       // best-effort
     }

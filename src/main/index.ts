@@ -12,7 +12,7 @@ import { DownloadManager } from './downloads'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
 import { HotkeyController } from './hotkey'
-import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, removeFfmpeg } from './ffmpeg'
+import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, ffprobePath, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
 import { downloadYtDlp, latestReleaseTag, ytDlpBinaryPath, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
 import { checkForUpdates, initUpdater, installUpdate } from './updater'
@@ -490,6 +490,12 @@ app.whenReady().then(async () => {
   initUpdater(mainWindow!)
   // Keep the yt-dlp engine fresh: first background check shortly after launch.
   scheduleEngineUpdate(ENGINE_FIRST_CHECK_MS)
+  // Self-heal older installs that only extracted ffmpeg but no ffprobe —
+  // yt-dlp's postprocessing requires both next to each other.
+  setTimeout(() => {
+    if (!ffmpegPath() || ffprobePath()) return
+    void downloadFfmpeg(() => {}, () => {}).catch(() => {})
+  }, 8000)
   // Check for app updates on startup (packaged only), after the window settles.
   if (app.isPackaged) {
     setTimeout(() => checkForUpdates(), 3000)

@@ -390,8 +390,9 @@ export class DownloadManager {
     // regardless of the configured folder layout (single videos keep it).
     const template = outputTemplate(opts.playlist ? 'playlist' : settings.outputLayout, settings.filenameTemplate)
     const args = ['--newline', '--no-warnings', '-f', selector, '-o', join(settings.downloadsDir, template)]
-    const managedFfmpeg = ffmpegManagedPath()
-    if (managedFfmpeg) args.push('--ffmpeg-location', ffmpegStoreDir())
+    // Only point yt-dlp at the managed folder when a binary is actually there —
+    // an explicit --ffmpeg-location disables its PATH fallback.
+    if (existsSync(ffmpegManagedPath())) args.push('--ffmpeg-location', ffmpegStoreDir())
     if (preset.extraArgs) args.push(...preset.extraArgs)
     if (!opts.playlist) args.push('--no-playlist')
     if (opts.playlist && opts.playlistItems) args.push('--playlist-items', opts.playlistItems)
