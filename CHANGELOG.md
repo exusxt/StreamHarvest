@@ -5,6 +5,19 @@ All notable changes to StreamHarvest.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.0] - 2026-10-15
+
+### Added
+
+- Follow channels and playlists with background new-video checks
+
+### Infra
+
+- Phase 5 roadmap and landing page follow preview
+- Use a neutral example.com URL in the preview mockup
+
+[Compare v0.6.1...v0.7.0](https://github.com/exusxt/StreamHarvest/compare/v0.6.1...v0.7.0)
+
 ## [v0.6.1] - 2026-08-24
 
 ### Fixed
