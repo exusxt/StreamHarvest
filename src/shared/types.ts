@@ -63,6 +63,48 @@ export interface PlaylistEntry {
   duration: number | null
 }
 
+/** What a followed URL points at. */
+export type FollowType = 'channel' | 'playlist'
+
+/**
+ * A followed channel or playlist (Phase 5). The main process checks it every
+ * few hours and queues newly published videos with the saved preset.
+ */
+export interface Follow {
+  id: string
+  url: string
+  title: string
+  thumbnail: string | null
+  type: FollowType
+  /** Video ids already seen (newest first, capped) so only new ones are queued. */
+  seenIds: string[]
+  /** Quality preset used when queueing new videos automatically. */
+  presetId: string
+  /** Queue new videos automatically instead of only notifying. */
+  autoDownload: boolean
+  /** ISO timestamp of the last successful check. */
+  lastCheckedAt: string | null
+  /** New videos found but not yet acknowledged by the user. */
+  newCount: number
+}
+
+/** A newly discovered video from a followed channel/playlist. */
+export interface FollowVideo {
+  id: string
+  title: string
+  url: string
+  thumbnail: string | null
+}
+
+/** Result of adding or checking a follow. */
+export interface FollowResult {
+  ok: boolean
+  follow: Follow | null
+  error: string | null
+  /** New videos found by a check (empty for add). */
+  newVideos: FollowVideo[]
+}
+
 /** Metadata fetched for a pasted URL, shown before downloading. */
 export interface VideoMetadata {
   id: string

@@ -5,10 +5,11 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, shell }
 import { dirname, join, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import type { AppStatus, FfmpegCheckResult, YtDlpCheckResult } from '../shared/types'
+import type { AppStatus, FfmpegCheckResult, Follow, YtDlpCheckResult } from '../shared/types'
 import { extractUrls } from '../shared/urls'
 import { translate } from '../shared/i18n'
 import { DownloadManager } from './downloads'
+import { ackFollow, addFollow, checkAllFollows, checkFollow, listFollows, removeFollow, setOnNewVideos, updateFollow } from './follows'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
 import { HotkeyController } from './hotkey'
@@ -100,6 +101,38 @@ async function runAutoEngineUpdate(): Promise<void> {
   scheduleEngineUpdate(nextDelay)
 }
 
+// Followed channels/playlists are polled on a slower cadence than the engine
+// update — a few checks per day is plenty and keeps the network quiet.
+const FOLLOW_FIRST_CHECK_MS = 2 * 60 * 1000
+const FOLLOW_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+
+let followTimer: NodeJS.Timeout | null = null
+
+function scheduleFollowCheck(delayMs: number): void {
+  if (followTimer) clearTimeout(followTimer)
+  followTimer = setTimeout(() => {
+    followTimer = null
+    void runFollowChecks()
+  }, delayMs)
+}
+
+/** Checks every follow (skipping while a download is active) and reschedules. */
+async function runFollowChecks(): Promise<void> {
+  try {
+    if (ytDlpPath() && !(manager?.busy ?? false)) {
+      await checkAllFollows()
+      broadcastFollows(await listFollows())
+    }
+  } catch {
+    // best-effort — a failed pass retries on the next interval
+  }
+  scheduleFollowCheck(FOLLOW_CHECK_INTERVAL_MS)
+}
+
+function broadcastFollows(list: Follow[]): void {
+  mainWindow?.webContents.send('follows:updated', list)
+}
+
 function registerIpc(): void {
   // App basics.
   ipcMain.handle('app:getVersion', () => app.getVersion())
@@ -175,9 +208,37 @@ function registerIpc(): void {
     }
   })
 
+  // Followed channels/playlists.
+  ipcMain.handle('follows:list', () => listFollows())
+  ipcMain.handle('follows:add', async (_e, url: string) => {
+    const preset = getSettings().audioOnly ? 'audio-mp3' : getSettings().defaultFormat
+    const res = await addFollow(String(url ?? ''), preset)
+    if (res.ok) broadcastFollows(await listFollows())
+    return res
+  })
+  ipcMain.handle('follows:remove', async (_e, id: string) => {
+    const list = await removeFollow(String(id))
+    broadcastFollows(list)
+    return list
+  })
+  ipcMain.handle('follows:update', async (_e, id: string, patch: { autoDownload?: boolean; presetId?: string }) => {
+    const list = await updateFollow(String(id), patch ?? {})
+    broadcastFollows(list)
+    return list
+  })
+  ipcMain.handle('follows:ack', async (_e, id: string) => {
+    const list = await ackFollow(String(id))
+    broadcastFollows(list)
+    return list
+  })
+  ipcMain.handle('follows:check', async (_e, id: string) => {
+    const res = await checkFollow(String(id))
+    broadcastFollows(await listFollows())
+    return res
+  })
+
   // Clipboard monitoring.
   ipcMain.handle('clipboard:consume', (_e, url: string) => clipboardMonitor?.consume(String(url ?? '')))
-
   // Settings.
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', async (_e, patch) => {
@@ -490,6 +551,35 @@ app.whenReady().then(async () => {
   initUpdater(mainWindow!)
   // Keep the yt-dlp engine fresh: first background check shortly after launch.
   scheduleEngineUpdate(ENGINE_FIRST_CHECK_MS)
+
+  // New videos from followed channels/playlists: queue them (or notify) and
+  // push the refreshed list to the renderer.
+  setOnNewVideos(async (follow, videos) => {
+    const s = getSettings()
+    if (follow.autoDownload) {
+      for (const v of videos) {
+        manager?.start({ url: v.url, presetId: follow.presetId, title: v.title, thumbnail: v.thumbnail })
+      }
+    }
+    if (s.notifications && Notification.isSupported()) {
+      try {
+        const one = videos.length === 1
+        new Notification({
+          title: translate(s.language, follow.autoDownload ? 'follows.notifyQueued' : 'follows.notifyFound'),
+          body: translate(
+            s.language,
+            follow.autoDownload ? (one ? 'follows.queuedOne' : 'follows.queuedMany') : one ? 'follows.foundOne' : 'follows.foundMany',
+            { count: videos.length, title: follow.title }
+          ),
+          silent: false
+        }).show()
+      } catch {
+        // notifications are best-effort
+      }
+    }
+    broadcastFollows(await listFollows())
+  })
+  scheduleFollowCheck(FOLLOW_FIRST_CHECK_MS)
   // Self-heal older installs that only extracted ffmpeg but no ffprobe —
   // yt-dlp's postprocessing requires both next to each other.
   setTimeout(() => {

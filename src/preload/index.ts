@@ -3,7 +3,7 @@
 // method is a thin ipcRenderer.invoke/send wrapper over the main-process IPC.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, Follow, FollowResult, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
 
 const api = {
   // App / engine status.
@@ -32,6 +32,19 @@ const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
   setSettings: (settings: Partial<AppSettings>): Promise<AppSettings> => ipcRenderer.invoke('settings:set', settings),
   chooseDownloadsDir: (): Promise<string | null> => ipcRenderer.invoke('settings:chooseDownloadsDir'),
+
+  // Followed channels/playlists.
+  listFollows: (): Promise<Follow[]> => ipcRenderer.invoke('follows:list'),
+  addFollow: (url: string): Promise<FollowResult> => ipcRenderer.invoke('follows:add', url),
+  removeFollow: (id: string): Promise<Follow[]> => ipcRenderer.invoke('follows:remove', id),
+  updateFollow: (id: string, patch: { autoDownload?: boolean; presetId?: string }): Promise<Follow[]> => ipcRenderer.invoke('follows:update', id, patch),
+  ackFollow: (id: string): Promise<Follow[]> => ipcRenderer.invoke('follows:ack', id),
+  checkFollow: (id: string): Promise<FollowResult> => ipcRenderer.invoke('follows:check', id),
+  onFollowsUpdated: (cb: (follows: Follow[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, follows: Follow[]): void => cb(follows)
+    ipcRenderer.on('follows:updated', listener)
+    return () => ipcRenderer.removeListener('follows:updated', listener)
+  },
 
   // yt-dlp binary management.
   installYtDlp: (): Promise<YtDlpOpResult> => ipcRenderer.invoke('ytdlp:install'),

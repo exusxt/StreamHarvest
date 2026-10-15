@@ -20,6 +20,7 @@ import { Onboarding } from './components/Onboarding'
 import { I18nProvider, useT } from './i18n'
 import { HomeScreen } from './screens/HomeScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
+import { FollowsScreen } from './screens/FollowsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
 const THEME_KEY = 'streamharvest-theme'
@@ -452,6 +453,8 @@ export default function App(): React.JSX.Element {
         )
       case 'downloads':
         return <DownloadsScreen jobs={jobs} onMove={moveJob} />
+      case 'follows':
+        return <FollowsScreen />
       case 'settings':
         return (
           <SettingsScreen
