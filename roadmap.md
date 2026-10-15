@@ -46,6 +46,36 @@ Goal: capture advanced users without scaring off casual ones.
 - Onboarding/first-run tutorial for non-technical users
 - Remaining themes rolled out (if staggered as later "theme pack" updates)
 
+## Phase 5 — Toward v1.0
+Goal: turn StreamHarvest from a great one-off downloader into something that works for you over time.
+
+Ships incrementally: 0.7.0 → 0.8.0 → 0.9.0 → 1.0.0.
+
+### 0.7.0 — Follow channels & playlists
+- Subscribe to a channel/playlist URL from the app (new sidebar screen)
+- Background check on a schedule + manual "Check now"
+- Auto-queue newly published videos (per-subscription opt-out, saved quality preset)
+- "New videos" desktop notifications when not auto-downloading
+
+### 0.8.0 — Download scheduling
+- Time-window scheduling (only download between set hours, queue outside them)
+- Bandwidth schedule (per-time-of-day speed limit) — completes Phase 4's promise
+- Schedule indicator in the queue UI
+
+### 0.9.0 — History overhaul
+- Search + filter (status, site, date) in history
+- Per-item re-download with the format it was downloaded with
+- Reveal in folder / clear one / clear all
+
+### 1.0.0 — v1.0
+- Polish pass across the three features above, docs & wiki updates, final smoke test
+
+## Sequencing notes for Phase 5
+
+- Follow/subscriptions gets its own persistent store (JSON under userData, mirroring the jobs-history pattern) and reuses the existing yt-dlp spawn plumbing for listing entries (`--flat-playlist --print`).
+- Scheduling gates the existing queue pump rather than spawning anything new — jobs stay "queued" until the window opens, so concurrency logic doesn't change.
+- History work is renderer-mostly; the job store already records format/preset — expose it.
+
 ## Notes on sequencing
 
 - Phase 1 is where the yt-dlp ↔ Electron IPC bridge gets built (spawning the process, parsing progress output, handling errors) — this plumbing pays off in every later phase, so it's worth getting right early.

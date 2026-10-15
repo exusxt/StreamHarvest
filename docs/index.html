@@ -55,7 +55,7 @@
       <section class="hero">
         <div class="wrap">
           <span class="chip hero-badge">
-              <b>v0.5.0</b> · YouTube · Vimeo · Twitch · hundreds more
+              <b>v0.7.0</b> · YouTube · Vimeo · Twitch · hundreds more
           </span>
           <h1>
             Download videos from<br />
@@ -101,7 +101,7 @@
               <div class="titlebar">
                 <img class="t-icon" src="assets/icon.png" alt="" width="20" height="20" />
                 <span class="t-name">StreamHarvest</span>
-                <span class="t-ver">v0.5.0</span>
+                <span class="t-ver">v0.7.0</span>
                 <div class="t-menu" id="titlebarTheme">
                   <button class="t-menu-btn" type="button">Theme</button>
                   <div class="t-menu-pop"></div>
@@ -125,11 +125,15 @@
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                     <span>Downloads</span>
                   </button>
+                  <button class="s-item" type="button" data-screen="follows">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                    <span>Follow</span>
+                  </button>
                   <button class="s-item" type="button" data-screen="settings">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                     <span>Settings</span>
                   </button>
-                  <span class="s-version">v0.5.0 · MIT</span>
+                  <span class="s-version">v0.7.0 · MIT</span>
                 </nav>
 
                 <div class="app-main">
@@ -228,6 +232,50 @@
                     <div class="queue-note">Queue: 2 running · 1 waiting · parallel limit 2</div>
                   </div>
 
+                  <!-- FOLLOWS screen -->
+                  <div class="screen" data-screen="follows">
+                    <div class="apanel">
+                      <div class="apanel-title">
+                        <svg class="accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                        Follow channels &amp; playlists
+                      </div>
+                      <div class="fetch-row">
+                        <span class="mock-input">https://example.com/channel/citylights</span>
+                        <span class="btn btn-primary demo-btn">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                          Follow
+                        </span>
+                      </div>
+                      <div class="saved-line"><span class="dot"></span>New videos are checked every few hours</div>
+                    </div>
+
+                    <div class="mock-dl">
+                      <div class="mock-thumb"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">City Lights Studio</div>
+                        <div class="m-sub"><span>Channel · auto-download · Best available</span><span>checked 12 min ago</span></div>
+                      </div>
+                      <span class="pill pill-accent">2 new</span>
+                    </div>
+                    <div class="mock-dl">
+                      <div class="mock-thumb alt"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">Synthwave Weekly</div>
+                        <div class="m-sub"><span>Playlist · notify only · Audio (MP3 192k)</span><span>checked 3 h ago</span></div>
+                      </div>
+                      <span class="pill">idle</span>
+                    </div>
+                    <div class="mock-dl">
+                      <div class="mock-thumb deep"></div>
+                      <div class="mock-meta">
+                        <div class="m-name">The Deep Sea Documentaries</div>
+                        <div class="m-sub"><span>Channel · auto-download · Best available</span><span>checked 3 h ago</span></div>
+                      </div>
+                      <span class="pill pill-good">queued</span>
+                    </div>
+                    <div class="queue-note">Background check every 6 hours · manual "Check now" per follow</div>
+                  </div>
+
                   <!-- SETTINGS screen -->
                   <div class="screen settings-grid" data-screen="settings">
                     <div class="apanel tight">
@@ -270,6 +318,7 @@
             <div class="demo-tabs" role="tablist" aria-label="Preview screens">
               <button type="button" class="dtab active" data-screen="home">Home</button>
               <button type="button" class="dtab" data-screen="downloads">Downloads</button>
+              <button type="button" class="dtab" data-screen="follows">Follow</button>
               <button type="button" class="dtab" data-screen="settings">Settings</button>
               <span class="hint">interactive preview — click around</span>
             </div>
@@ -324,6 +373,13 @@
               </div>
               <h3>Playlists &amp; channels</h3>
               <p>Load entire playlists or channels and tick exactly the videos you want. One failing video never blocks the rest.</p>
+            </div>
+            <div class="feature reveal">
+              <div class="icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+              </div>
+              <h3>Follow channels &amp; playlists</h3>
+              <p>Subscribe to a channel or playlist: new videos are checked in the background, then queued or notified automatically.</p>
             </div>
             <div class="feature reveal">
               <div class="icon">
