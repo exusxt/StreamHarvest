@@ -174,6 +174,8 @@ export interface DownloadJob {
   bytesTotal: number
   /** Absolute path of the finished file. */
   filePath: string | null
+  /** All files produced by this job (multi-file playlists). */
+  filePaths?: string[]
   error: string | null
   createdAt: string
   completedAt: string | null
@@ -199,6 +201,8 @@ export interface LibraryItem {
   ext: string | null
   /** Absolute path of the media file, when it was resolved. */
   filePath: string | null
+  /** All files produced by this download (multi-file playlists). */
+  filePaths?: string[]
   presetId: string
   formatId?: string
   playlist: boolean

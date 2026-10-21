@@ -1,4 +1,4 @@
-// Download manager: owns every download job, spawns yt-dlp subprocesses,
+﻿// Download manager: owns every download job, spawns yt-dlp subprocesses,
 // parses their progress output, enforces the concurrency limit and persists
 // finished jobs as history.
 
@@ -578,6 +578,8 @@ export class DownloadManager {
   private trackFile(job: DownloadJob, path: string): void {
     if (!path) return
     job.filePath = path
+    if (!job.filePaths) job.filePaths = []
+    if (!job.filePaths.includes(path)) job.filePaths.push(path)
     this.partFiles.set(job.id, `${path}.part`)
     const list = this.fileCandidates.get(job.id) ?? []
     if (!list.includes(path)) {
@@ -590,42 +592,60 @@ export class DownloadManager {
    * path that differs from the file it really wrote (Windows-invalid title
    * characters are sanitized differently in the destination message than on
    * disk), so we verify candidates and fall back to scanning for the video id. */
-  private resolveFilePath(job: DownloadJob): void {
-    const candidates = this.fileCandidates.get(job.id) ?? []
-    for (const p of candidates) {
-      if (!p.endsWith('.part') && existsSync(p)) {
-        job.filePath = p
-        return
+                    private resolveFilePath(job: DownloadJob): void {
+    const candidatesArr = this.fileCandidates.get(job.id) as unknown
+    const candidates: string[] = []
+    if (Array.isArray(candidatesArr)) {
+      for (const x of candidatesArr as unknown[]) {
+        if (typeof x === 'string') candidates.push(x)
       }
     }
-    const id = videoIdFromPaths(candidates) ?? videoIdFromUrl(job.url)
-    if (id) {
-      const dir = this.getSettings().downloadsDir
-      let best: { name: string; mtime: number } | null = null
-      try {
-        for (const name of walkFiles(dir, (n) => n.includes(`[${id}]`) && !n.endsWith('.part'))) {
-          let mtime = 0
-          try {
-            mtime = statSync(name).mtimeMs
-          } catch {
-            continue
+    const picked: string[] = []
+    for (let i = 0; i < candidates.length; i++) {
+      const p = candidates[i]
+      if (p.endsWith('.part')) continue
+      if (existsSync(p) && picked.indexOf(p) === -1) picked.push(p)
+    }
+    if (picked.length === 0) {
+      const id = videoIdFromPaths(candidates) ?? videoIdFromUrl(job.url)
+      if (id) {
+        const dir = this.getSettings().downloadsDir
+        let best: { name: string; mtime: number } | null = null
+        try {
+          const it = walkFiles(dir, ((n: unknown) => typeof n === 'string' && (n as string).indexOf('[' + id + ']') >= 0 && (n as string).indexOf('.part') === -1) as any) as unknown
+          if (typeof (it as any)[Symbol.iterator] === 'function') {
+            for (const name of it as Iterable<unknown>) {
+              const nm = name as string
+              if (typeof nm === 'string') {
+                if (picked.indexOf(nm) === -1) picked.push(nm)
+                let mtime = 0
+                try {
+                  mtime = statSync(nm).mtimeMs
+                } catch {
+                  continue
+                }
+                if (!best || mtime > best.mtime) best = { name: nm, mtime }
+              }
+            }
           }
-          if (!best || mtime > best.mtime) best = { name, mtime }
+        } catch {
         }
-      } catch {
-        // downloads dir unreadable — fall through to best effort
+        if (best && !job.filePath) job.filePath = best.name
       }
-      if (best) {
-        job.filePath = best.name
-        return
-      }
+    }
+    if (picked.length > 0) {
+      if (!job.filePath || picked.indexOf(job.filePath) === -1) job.filePath = picked[0]
+      if (!job.filePaths) job.filePaths = []
+      for (let i = 0; i < picked.length; i++) if ((job.filePaths as string[]).indexOf(picked[i]) === -1) (job.filePaths as string[]).push(picked[i])
+      return
     }
     const last = candidates[candidates.length - 1]
-    if (last) job.filePath = last
-  }
-
-  /** Applies the final status after a subprocess exits. */
-  private finalize(job: DownloadJob, code: number | null, errTail: string[]): void {
+    if (typeof last === 'string') {
+      job.filePath = last
+      if (!job.filePaths) job.filePaths = []
+      if ((job.filePaths as string[]).indexOf(last) === -1) (job.filePaths as string[]).push(last)
+    }
+  }private finalize(job: DownloadJob, code: number | null, errTail: string[]): void {
     if (job.status === 'paused' || job.status === 'cancelled') {
       void this.persist()
       return

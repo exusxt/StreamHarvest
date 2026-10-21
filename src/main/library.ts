@@ -44,6 +44,19 @@ function itemFromJob(job: DownloadJob): LibraryItem | null {
       sizeBytes = null
     }
   }
+  const files = (job.filePaths && job.filePaths.length > 0 ? job.filePaths : job.filePath ? [job.filePath] : [])
+  let totalSize = sizeBytes
+  if (files.length > 1) {
+    let sum = 0
+    for (const f of files) {
+      try {
+        sum += statSync(f).size
+      } catch {
+        // skip
+      }
+    }
+    if (sum > 0) totalSize = sum
+  }
   return {
     id: job.id,
     jobId: job.id,
@@ -52,10 +65,11 @@ function itemFromJob(job: DownloadJob): LibraryItem | null {
     thumbnail: job.thumbnail,
     site: job.site ?? siteFromUrl(job.url),
     duration: job.duration ?? null,
-    sizeBytes,
+    sizeBytes: totalSize,
     formatLabel: job.formatLabel,
     ext,
     filePath: job.filePath,
+    filePaths: files.length > 0 ? files : undefined,
     presetId: job.presetId,
     formatId: job.formatId,
     playlist: job.playlist,
@@ -103,22 +117,25 @@ export class LibraryService {
     await this.persist()
   }
 
-  /** Current library plus derived storage stats and missing-file ids. */
+  /** Snapshot with derived storage stats and missing-file ids. */
   snapshot(): LibrarySnapshot {
     let totalBytes = 0
     const missingIds: string[] = []
     for (const item of this.items) {
-      if (!item.filePath || !existsSync(item.filePath)) {
+      const files = item.filePaths && item.filePaths.length > 0 ? item.filePaths : item.filePath ? [item.filePath] : []
+      const existing = files.filter((p) => existsSync(p))
+      if (existing.length === 0 && files.length > 0) {
         missingIds.push(item.id)
         continue
       }
+      if (existing.length === 0) continue
       let size = item.sizeBytes
       if (size === null || size <= 0) {
-        try {
-          size = statSync(item.filePath).size
-        } catch {
-          size = 0
+        let sum = 0
+        for (const p of existing) {
+          try { sum += statSync(p).size } catch { }
         }
+        size = sum > 0 ? sum : 0
       }
       totalBytes += size
     }
@@ -128,8 +145,16 @@ export class LibraryService {
   /** Absolute path of an entry's file, when it still exists on disk. */
   fileOf(id: string): string | null {
     const item = this.items.find((it) => it.id === id)
-    if (!item?.filePath || !existsSync(item.filePath)) return null
-    return item.filePath
+    const list = item?.filePaths && item.filePaths.length > 0 ? item.filePaths : item?.filePath ? [item.filePath] : []
+    for (const p of list) if (p && existsSync(p)) return p
+    return null
+  }
+
+  /** All files for an entry, in order. */
+  filesOf(id: string): string[] {
+    const item = this.items.find((it) => it.id === id)
+    const list = item?.filePaths && item.filePaths.length > 0 ? item.filePaths : item?.filePath ? [item.filePath] : []
+    return list.filter((p) => p && existsSync(p))
   }
 
   /** Adds or updates an entry for a completed job. */
@@ -138,7 +163,7 @@ export class LibraryService {
     if (!item) return
     const path = item.filePath?.toLowerCase()
     const idx = this.items.findIndex(
-      (it) => it.id === item.id || (!!path && it.filePath?.toLowerCase() === path)
+      (it) => it.id === item.id || (!!path && it.filePath?.toLowerCase() === path) || (!!path && it.filePaths?.some((f) => f.toLowerCase() === path))
     )
     if (idx === -1) this.items.push(item)
     else this.items[idx] = { ...item, id: this.items[idx].id, addedAt: this.items[idx].addedAt }
@@ -158,21 +183,27 @@ export class LibraryService {
     await this.remove(this.snapshot().missingIds)
   }
 
-  /** Deletes the media file (restricted to the downloads dir) and its entry. */
+  /** Deletes the media file(s) (restricted to the downloads dir) and their entry. */
   async deleteFile(id: string): Promise<void> {
     const item = this.items.find((it) => it.id === id)
     if (!item) return
-    if (!item.filePath) {
+    const files = item.filePaths && item.filePaths.length > 0 ? item.filePaths : item.filePath ? [item.filePath] : []
+    if (files.length === 0) {
       await this.remove([id])
       return
     }
-    if (!isInside(this.getSettings().downloadsDir, item.filePath)) return
-    try {
-      rmSync(item.filePath, { force: true })
-    } catch {
-      // Keep the entry when a locked file could not actually be removed.
-      if (existsSync(item.filePath)) return
+    let allAllowed = true
+    for (const f of files) if (!f || !isInside(this.getSettings().downloadsDir, f)) { allAllowed = false; break }
+    if (!allAllowed) return
+    let blocked = false
+    for (const f of files) {
+      try {
+        rmSync(f, { force: true })
+      } catch {
+        if (existsSync(f)) { blocked = true; break }
+      }
     }
+    if (blocked) return
     await this.remove([id])
   }
 

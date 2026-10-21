@@ -620,18 +620,54 @@ export function LibraryScreen({
                 <X className="h-4 w-4" />
               </Button>
             </div>
+      {playing ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm"
+          onClick={closePlayer}
+          role="dialog"
+          aria-modal="true"
+          aria-label={playing.title}
+        >
+          <div
+            className="flex w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-sc64-border bg-sc64-panel shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center gap-2 border-b border-sc64-border px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-sc64-text" title={playing.title}>{playing.title}</p>
+                <p className="truncate text-[11px] text-sc64-muted">{itemMeta(playing)}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void window.api.openLibraryItem(playing.id)}>
+                <ExternalLink className="h-3.5 w-3.5" /> {t('library.player.openExternal')}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void window.api.revealLibraryItem(playing.id)}>
+                <FolderOpen className="h-3.5 w-3.5" /> {t('library.reveal')}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={closePlayer} title={t('library.player.close')}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             <div className="bg-black">
               <video
                 key={playing.id}
-                src={mediaUrlFor(playing.id)}
+                src={mediaUrlFor(playing.id, 0)}
                 poster={playing.thumbnail ?? undefined}
                 controls
                 autoPlay
                 playsInline
+                preload="auto"
                 className="max-h-[78vh] w-full bg-black"
                 onError={() => setPlayFailed(true)}
               />
             </div>
+            {playFailed ? (
+              <div className="border-t border-sc64-border px-4 py-3 text-center text-xs text-sc64-muted">
+                {t('library.player.error')}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
             {playFailed ? (
               <div className="border-t border-sc64-border px-4 py-3 text-center text-xs text-sc64-muted">
                 {t('library.player.error')}
