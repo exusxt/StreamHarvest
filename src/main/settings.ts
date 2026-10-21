@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AppSettings } from '../shared/types'
+import { parseTimeOfDay } from '../shared/schedule'
 
 const defaultDownloadsDir = join(homedir(), 'Downloads', 'StreamHarvest')
 
@@ -28,6 +29,13 @@ const DEFAULTS: AppSettings = {
   language: 'en',
   globalHotkey: true,
   speedLimit: '',
+  downloadWindowEnabled: false,
+  downloadWindowStart: '22:00',
+  downloadWindowEnd: '06:00',
+  speedWindowEnabled: false,
+  speedWindowStart: '09:00',
+  speedWindowEnd: '18:00',
+  speedWindowLimit: '2M',
   proxy: '',
   advancedMode: false,
   extraArgs: '',
@@ -50,6 +58,17 @@ function sanitizeFilenameTemplate(value: string): string {
 
 function settingsFile(): string {
   return join(app.getPath('userData'), 'settings.json')
+}
+
+/** Keeps the schedule fields in range after a load or a settings patch. */
+function normalizeSchedule(s: AppSettings): void {
+  s.downloadWindowEnabled = s.downloadWindowEnabled === true
+  if (parseTimeOfDay(s.downloadWindowStart) === null) s.downloadWindowStart = DEFAULTS.downloadWindowStart
+  if (parseTimeOfDay(s.downloadWindowEnd) === null) s.downloadWindowEnd = DEFAULTS.downloadWindowEnd
+  s.speedWindowEnabled = s.speedWindowEnabled === true
+  if (parseTimeOfDay(s.speedWindowStart) === null) s.speedWindowStart = DEFAULTS.speedWindowStart
+  if (parseTimeOfDay(s.speedWindowEnd) === null) s.speedWindowEnd = DEFAULTS.speedWindowEnd
+  if (typeof s.speedWindowLimit !== 'string') s.speedWindowLimit = DEFAULTS.speedWindowLimit
 }
 
 /** Loads persisted settings (if any), merging over the defaults. */
@@ -78,6 +97,7 @@ export async function loadSettings(): Promise<void> {
     settings.advancedMode = settings.advancedMode === true
     if (typeof settings.extraArgs !== 'string') settings.extraArgs = DEFAULTS.extraArgs
     settings.onboarded = settings.onboarded === true
+    normalizeSchedule(settings)
   } catch {
     // no settings yet — keep defaults
   }
@@ -96,6 +116,7 @@ export async function setSettings(patch: Partial<AppSettings>): Promise<AppSetti
   } else {
     settings.filenameTemplate = DEFAULTS.filenameTemplate
   }
+  normalizeSchedule(settings)
   try {
     await mkdir(app.getPath('userData'), { recursive: true })
     await writeFile(settingsFile(), JSON.stringify(settings, null, 2), 'utf-8')

@@ -15,6 +15,7 @@ import { TrayController } from './tray'
 import { HotkeyController } from './hotkey'
 import { checkFfmpegUpdate, downloadFfmpeg, ffmpegPath, ffmpegStatus, ffprobePath, removeFfmpeg } from './ffmpeg'
 import { getSettings, loadSettings, setSettings } from './settings'
+import { scheduleState } from '../shared/schedule'
 import { downloadYtDlp, latestReleaseTag, ytDlpBinaryPath, ytDlpPath, ytDlpStatus, ytDlpVersion } from './ytdlp'
 import { checkForUpdates, initUpdater, installUpdate } from './updater'
 
@@ -166,7 +167,8 @@ function registerIpc(): void {
       ffmpeg,
       downloadsDir: getSettings().downloadsDir,
       pythonStatus: null,
-      platform: process.platform
+      platform: process.platform,
+      schedule: scheduleState(getSettings(), new Date())
     }
   })
 
@@ -245,6 +247,7 @@ function registerIpc(): void {
     const next = await setSettings(patch ?? {})
     trayController?.sync()
     hotkeyController?.sync()
+    manager?.wake()
     return next
   })
   ipcMain.handle('settings:chooseDownloadsDir', async (): Promise<string | null> => {
@@ -535,6 +538,7 @@ app.whenReady().then(async () => {
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
   })
+  manager.wake()
   clipboardMonitor = new ClipboardMonitor(getSettings, (url) => {
     mainWindow?.webContents.send('clipboard:url', url)
   })

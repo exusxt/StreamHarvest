@@ -4,12 +4,12 @@
  * downloads with re-download and reveal-in-folder actions.
  */
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, FolderOpen, History, ListPlus, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
-import type { DownloadJob } from '../../../shared/types'
+import { ArrowDown, ArrowUp, CalendarClock, FolderOpen, History, ListPlus, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
+import type { DownloadJob, ScheduleState } from '../../../shared/types'
 import { extractUrls } from '../../../shared/urls'
 import { useT, type TFunc } from '../i18n'
 import { Badge, Button, Panel, ProgressBar, Spinner } from '../components/ui'
-import { formatBytes } from '../lib'
+import { cn, formatBytes } from '../lib'
 
 const ACTIVE = new Set(['queued', 'fetching', 'downloading', 'paused'])
 
@@ -162,10 +162,12 @@ function JobRow({
 
 export function DownloadsScreen({
   jobs,
-  onMove
+  onMove,
+  schedule
 }: {
   jobs: DownloadJob[]
   onMove: (id: string, direction: -1 | 1) => void
+  schedule: ScheduleState | null
 }): React.JSX.Element {
   const t = useT()
   const [restarting, setRestarting] = useState<string | null>(null)
@@ -236,6 +238,26 @@ export function DownloadsScreen({
           ) : null}
         </div>
       </div>
+
+      {schedule?.downloadWindowEnabled ? (
+        <Panel
+          className={cn(
+            'flex items-start gap-3 p-3',
+            schedule.downloadAllowed ? 'border-sc64-accent/40 bg-sc64-accent/5' : 'border-sc64-warn/40 bg-sc64-warn/5'
+          )}
+        >
+          <CalendarClock className={cn('mt-0.5 h-4 w-4 shrink-0', schedule.downloadAllowed ? 'text-sc64-accent' : 'text-sc64-warn')} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-sc64-text">
+              {schedule.downloadAllowed ? t('downloads.schedule.active') : t('downloads.schedule.waiting', { start: schedule.downloadWindowStart })}
+            </p>
+            <p className="mt-0.5 text-[11px] text-sc64-muted">
+              {t('downloads.schedule.window', { start: schedule.downloadWindowStart, end: schedule.downloadWindowEnd })}
+              {schedule.speedWindowActive ? ` · ${t('downloads.schedule.speed', { limit: schedule.effectiveSpeedLimit || t('settings.noLimit') })}` : ''}
+            </p>
+          </div>
+        </Panel>
+      ) : null}
 
       {importOpen ? (
         <Panel>

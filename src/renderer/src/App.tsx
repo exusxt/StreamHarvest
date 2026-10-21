@@ -130,6 +130,13 @@ export default function App(): React.JSX.Element {
     return offMax
   }, [refreshStatus])
 
+  // Keep the schedule indicator in sync while a download/speed window is on.
+  useEffect(() => {
+    if (!status?.schedule?.downloadWindowEnabled && !status?.schedule?.speedWindowEnabled) return
+    const id = setInterval(() => void refreshStatus(), 30 * 1000)
+    return () => clearInterval(id)
+  }, [status?.schedule?.downloadWindowEnabled, status?.schedule?.speedWindowEnabled, refreshStatus])
+
   useEffect(() => {
     const offJob = window.api.onJobUpdate((job) => {
       setJobs((prev) => {
@@ -452,7 +459,7 @@ export default function App(): React.JSX.Element {
           />
         )
       case 'downloads':
-        return <DownloadsScreen jobs={jobs} onMove={moveJob} />
+        return <DownloadsScreen jobs={jobs} onMove={moveJob} schedule={status?.schedule ?? null} />
       case 'follows':
         return <FollowsScreen />
       case 'settings':

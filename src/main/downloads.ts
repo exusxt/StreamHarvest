@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { app, Notification } from 'electron'
 import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, OutputFormat, OutputLayout, PlaylistEntry, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
+import { effectiveSpeedLimit, isWithinWindow } from '../shared/schedule'
 import { translate } from '../shared/i18n'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
 import { ytDlpPath } from './ytdlp'
@@ -138,6 +139,9 @@ export class DownloadManager {
   private partFiles = new Map<string, string>()
   private fileCandidates = new Map<string, string[]>()
   private activeCount = 0
+  /** Jobs paused because the download window closed; auto-resumed when it opens. */
+  private schedulePaused = new Set<string>()
+  private scheduleTimer: NodeJS.Timeout | null = null
 
   /** True while any job is queued/downloading (blocks engine self-update on Windows). */
   get busy(): boolean {
@@ -151,6 +155,10 @@ export class DownloadManager {
     private onJobUpdate: (job: DownloadJob) => void
   ) {
     void this.loadHistory()
+    // Re-evaluate the schedule twice a minute: pauses running downloads when
+    // the window closes and resumes queued ones when it opens.
+    this.scheduleTimer = setInterval(() => this.wake(), 30 * 1000)
+    this.scheduleTimer.unref()
   }
 
   /** Active jobs in queue order, then finished history newest first. */
@@ -300,6 +308,7 @@ export class DownloadManager {
   async resume(id: string): Promise<void> {
     const job = this.jobs.get(id)
     if (!job || job.status !== 'paused') return
+    this.schedulePaused.delete(id)
     job.status = 'queued'
     job.error = null
     if (!this.order.includes(id)) this.order.push(id)
@@ -354,9 +363,55 @@ export class DownloadManager {
     this.pump()
   }
 
+  /** Applies schedule gates and pumps the queue (timer + settings changes). */
+  wake(): void {
+    this.applySchedule()
+    this.pump()
+  }
+
+  /**
+   * Enforces the download window: pauses running jobs when it closes and
+   * re-queues the jobs it paused once it opens again.
+   */
+  private applySchedule(): void {
+    const s = this.getSettings()
+    const open = !s.downloadWindowEnabled || isWithinWindow(new Date(), s.downloadWindowStart, s.downloadWindowEnd)
+    if (open) {
+      if (this.schedulePaused.size === 0) return
+      for (const id of this.schedulePaused) {
+        const job = this.jobs.get(id)
+        if (job && job.status === 'paused') {
+          job.status = 'queued'
+          if (!this.order.includes(id)) this.order.push(id)
+          this.emit(job)
+        }
+      }
+      this.schedulePaused.clear()
+      return
+    }
+    for (const job of this.jobs.values()) {
+      if (job.status !== 'downloading' && job.status !== 'fetching') continue
+      this.schedulePaused.add(job.id)
+      job.status = 'paused'
+      this.emit(job)
+      this.activeCount = Math.max(0, this.activeCount - 1)
+      const child = this.children.get(job.id)
+      if (child) {
+        try {
+          child.kill()
+        } catch {
+          // already gone
+        }
+      }
+    }
+    void this.persist()
+  }
+
   /** Starts queued jobs while slots are free, oldest in the queue first. */
   private pump(): void {
-    const limit = this.getSettings().concurrentLimit
+    const s = this.getSettings()
+    if (s.downloadWindowEnabled && !isWithinWindow(new Date(), s.downloadWindowStart, s.downloadWindowEnd)) return
+    const limit = s.concurrentLimit
     const queued = [...this.jobs.values()]
       .filter((j) => j.status === 'queued')
       .sort((a, b) => this.orderIndex(a) - this.orderIndex(b))
@@ -414,8 +469,9 @@ export class DownloadManager {
       args.push('--write-subs', '--sub-langs', subtitleLangs, '--sub-format', 'best')
     }
 
-    // Phase 4 network flags.
-    if (settings.speedLimit.trim()) args.push('--limit-rate', settings.speedLimit.trim())
+    // Phase 4 network flags, with the optional per-time-of-day speed window.
+    const limitRate = effectiveSpeedLimit(settings, new Date())
+    if (limitRate) args.push('--limit-rate', limitRate)
     if (settings.proxy.trim()) args.push('--proxy', settings.proxy.trim())
     args.push(job.url)
 

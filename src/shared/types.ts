@@ -12,6 +12,23 @@ export interface AppStatus {
   pythonStatus: string | null
   /** `process.platform` value ('win32' | 'darwin' | 'linux'), for UI guidance. */
   platform: string
+  /** Live scheduling state for the queue indicator. */
+  schedule: ScheduleState
+}
+
+/** Scheduling state: download window + per-time-of-day speed limit. */
+export interface ScheduleState {
+  /** Restrict downloads to the daily time window. */
+  downloadWindowEnabled: boolean
+  /** Whether downloads are allowed at the moment. */
+  downloadAllowed: boolean
+  downloadWindowStart: string
+  downloadWindowEnd: string
+  /** Apply a separate speed limit inside a daily window. */
+  speedWindowEnabled: boolean
+  speedWindowActive: boolean
+  /** Speed limit currently in effect ('' means unlimited). */
+  effectiveSpeedLimit: string
 }
 
 /** Presence and version info for the yt-dlp engine binary. */
@@ -201,6 +218,20 @@ export interface AppSettings {
   globalHotkey: boolean
   /** yt-dlp `--limit-rate` value, e.g. '500K' or '1M'; empty means unlimited. */
   speedLimit: string
+  /** Only start/continue downloads inside the daily time window. */
+  downloadWindowEnabled: boolean
+  /** Download window start, 'HH:MM' local time. */
+  downloadWindowStart: string
+  /** Download window end, 'HH:MM' local time (may cross midnight). */
+  downloadWindowEnd: string
+  /** Apply a different speed limit inside a daily time window. */
+  speedWindowEnabled: boolean
+  /** Speed window start, 'HH:MM' local time. */
+  speedWindowStart: string
+  /** Speed window end, 'HH:MM' local time (may cross midnight). */
+  speedWindowEnd: string
+  /** Speed limit used inside the speed window; empty means unlimited. */
+  speedWindowLimit: string
   /** yt-dlp `--proxy` value (http/socks); empty means direct connection. */
   proxy: string
   /** Pass raw yt-dlp arguments from the advanced-mode box. */

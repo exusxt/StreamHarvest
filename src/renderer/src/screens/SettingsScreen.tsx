@@ -3,7 +3,7 @@
  * engine section (yt-dlp and ffmpeg install / update / check / remove).
  */
 import { useEffect, useState } from 'react'
-import { Captions, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Gauge, Globe, Palette, RefreshCw, Settings2, SlidersHorizontal, Trash2, Wrench, Zap } from 'lucide-react'
+import { Captions, CalendarClock, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Gauge, Globe, Palette, RefreshCw, Settings2, SlidersHorizontal, Trash2, Wrench, Zap } from 'lucide-react'
 import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, Language, OutputFormat, OutputLayout, YtDlpCheckResult } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { hotkeyLabel } from '../../../shared/hotkey'
@@ -275,6 +275,76 @@ export function SettingsScreen({
             />
           </div>
         </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <CalendarClock className="h-3.5 w-3.5" /> {t('settings.schedule')}
+        </div>
+        <Checkbox
+          label={t('settings.downloadWindow')}
+          hint={t('settings.downloadWindowHint')}
+          checked={settings?.downloadWindowEnabled ?? false}
+          onChange={(v) => update({ downloadWindowEnabled: v })}
+        />
+        {settings?.downloadWindowEnabled ? (
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <Field label={t('settings.windowStart')}>
+              <Input
+                type="time"
+                value={settings?.downloadWindowStart ?? '22:00'}
+                onChange={(e) => update({ downloadWindowStart: e.target.value })}
+              />
+            </Field>
+            <Field label={t('settings.windowEnd')} hint={t('settings.windowCrossesMidnight')}>
+              <Input
+                type="time"
+                value={settings?.downloadWindowEnd ?? '06:00'}
+                onChange={(e) => update({ downloadWindowEnd: e.target.value })}
+              />
+            </Field>
+          </div>
+        ) : null}
+        <div className="mt-3">
+          <Checkbox
+            label={t('settings.speedWindow')}
+            hint={t('settings.speedWindowHint')}
+            checked={settings?.speedWindowEnabled ?? false}
+            onChange={(v) => update({ speedWindowEnabled: v })}
+          />
+        </div>
+        {settings?.speedWindowEnabled ? (
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <Field label={t('settings.windowStart')}>
+              <Input
+                type="time"
+                value={settings?.speedWindowStart ?? '09:00'}
+                onChange={(e) => update({ speedWindowStart: e.target.value })}
+              />
+            </Field>
+            <Field label={t('settings.windowEnd')}>
+              <Input
+                type="time"
+                value={settings?.speedWindowEnd ?? '18:00'}
+                onChange={(e) => update({ speedWindowEnd: e.target.value })}
+              />
+            </Field>
+            <Field label={t('settings.windowLimit')} hint={t('settings.windowLimitHint')}>
+              <Select
+                value={settings?.speedWindowLimit ?? ''}
+                onChange={(e) => update({ speedWindowLimit: e.target.value })}
+              >
+                <option value="">{t('settings.noLimit')}</option>
+                <option value="100K">100 K</option>
+                <option value="500K">500 K</option>
+                <option value="1M">1 MB</option>
+                <option value="2M">2 MB</option>
+                <option value="5M">5 MB</option>
+                <option value="10M">10 MB</option>
+              </Select>
+            </Field>
+          </div>
+        ) : null}
       </Panel>
 
       <Panel>
