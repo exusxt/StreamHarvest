@@ -1,14 +1,15 @@
 // Electron main-process entry point: app lifecycle, the frameless window and
 // the IPC surface that drives the yt-dlp download engine.
 
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
 import { dirname, join, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import type { AppStatus, FfmpegCheckResult, Follow, YtDlpCheckResult } from '../shared/types'
+import type { AppStatus, FfmpegCheckResult, Follow, LibrarySnapshot, YtDlpCheckResult } from '../shared/types'
 import { extractUrls } from '../shared/urls'
 import { translate } from '../shared/i18n'
 import { DownloadManager } from './downloads'
+import { LibraryService } from './library'
 import { ackFollow, addFollow, checkAllFollows, checkFollow, listFollows, removeFollow, setOnNewVideos, updateFollow } from './follows'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
@@ -21,6 +22,7 @@ import { checkForUpdates, initUpdater, installUpdate } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let manager: DownloadManager | null = null
+let library: LibraryService | null = null
 let clipboardMonitor: ClipboardMonitor | null = null
 let trayController: TrayController | null = null
 let hotkeyController: HotkeyController | null = null
@@ -134,6 +136,14 @@ function broadcastFollows(list: Follow[]): void {
   mainWindow?.webContents.send('follows:updated', list)
 }
 
+function librarySnapshot(): LibrarySnapshot {
+  return library?.snapshot() ?? { items: [], count: 0, totalBytes: 0, missingIds: [] }
+}
+
+function broadcastLibrary(): void {
+  mainWindow?.webContents.send('library:updated', librarySnapshot())
+}
+
 function registerIpc(): void {
   // App basics.
   ipcMain.handle('app:getVersion', () => app.getVersion())
@@ -157,6 +167,36 @@ function registerIpc(): void {
     } catch {
       // best-effort
     }
+  })
+  ipcMain.handle('app:copyText', (_e, text: string) => {
+    clipboard.writeText(String(text ?? ''))
+  })
+
+  // Media library (0.9.0).
+  ipcMain.handle('library:get', () => librarySnapshot())
+  ipcMain.handle('library:remove', async (_e, ids: string[] | string) => {
+    const list = Array.isArray(ids) ? ids.map(String) : [String(ids)]
+    await library?.remove(list)
+    broadcastLibrary()
+    return librarySnapshot()
+  })
+  ipcMain.handle('library:removeMissing', async () => {
+    await library?.removeMissing()
+    broadcastLibrary()
+    return librarySnapshot()
+  })
+  ipcMain.handle('library:deleteFile', async (_e, id: string) => {
+    await library?.deleteFile(String(id))
+    broadcastLibrary()
+    return librarySnapshot()
+  })
+  ipcMain.handle('library:open', async (_e, id: string) => {
+    const path = library?.fileOf(String(id))
+    if (path) await shell.openPath(path)
+  })
+  ipcMain.handle('library:reveal', (_e, id: string) => {
+    const path = library?.fileOf(String(id))
+    if (path) shell.showItemInFolder(path)
   })
 
   // Combined engine + settings status for the renderer shell.
@@ -535,8 +575,13 @@ app.whenReady().then(async () => {
   await loadSettings()
   registerProtocolClient()
   pendingProtocolUrl = parseProtocolFromArgv(process.argv)
+  library = new LibraryService(getSettings)
+  await library.init()
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
+    if (job.status === 'completed') {
+      void library?.addFromJob(job).then(() => broadcastLibrary())
+    }
   })
   manager.wake()
   clipboardMonitor = new ClipboardMonitor(getSettings, (url) => {

@@ -3,11 +3,11 @@
  * active item is tinted with the accent color; each row uses the standard
  * panel/border styling from the Summer Breeze design system.
  */
-import { Home, History, Rss, Settings } from 'lucide-react'
+import { Home, LibraryBig, Rss, Settings } from 'lucide-react'
 import { useT } from '../i18n'
 import { cn } from '../lib'
 
-export type ScreenId = 'home' | 'downloads' | 'follows' | 'settings'
+export type ScreenId = 'home' | 'library' | 'follows' | 'settings'
 
 export function Sidebar({
   active,
@@ -21,7 +21,7 @@ export function Sidebar({
   const t = useT()
   const ITEMS: Array<{ id: ScreenId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'home', label: t('nav.home'), icon: Home },
-    { id: 'downloads', label: t('nav.downloads'), icon: History },
+    { id: 'library', label: t('nav.library'), icon: LibraryBig },
     { id: 'follows', label: t('nav.follows'), icon: Rss },
     { id: 'settings', label: t('nav.settings'), icon: Settings }
   ]

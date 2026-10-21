@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Download, ListChecks, RefreshCw, Shuffle, X } from 'lucide-react'
-import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, UpdateState, VideoMetadata } from '../../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, LibrarySnapshot, UpdateState, VideoMetadata } from '../../shared/types'
 import { QUALITY_PRESETS } from '../../shared/types'
 import { buildPlaylistItems } from '../../shared/playlist'
 import { extractUrls } from '../../shared/urls'
@@ -19,7 +19,7 @@ import { UpdateToast } from './components/UpdateToast'
 import { Onboarding } from './components/Onboarding'
 import { I18nProvider, useT } from './i18n'
 import { HomeScreen } from './screens/HomeScreen'
-import { DownloadsScreen } from './screens/DownloadsScreen'
+import { LibraryScreen } from './screens/LibraryScreen'
 import { FollowsScreen } from './screens/FollowsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
@@ -52,6 +52,7 @@ export default function App(): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false)
   const [galleryBg, setGalleryBg] = useState<string | null>(null)
   const [jobs, setJobs] = useState<DownloadJob[]>([])
+  const [library, setLibrary] = useState<LibrarySnapshot | null>(null)
   const [installing, setInstalling] = useState(false)
   const [installProgress, setInstallProgress] = useState<BinaryProgress | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
@@ -126,6 +127,7 @@ export default function App(): React.JSX.Element {
     window.api.getVersion().then(setVersion).catch(() => undefined)
     window.api.windowIsMaximized().then(setMaximized).catch(() => undefined)
     window.api.listDownloads().then(setJobs).catch(() => undefined)
+    window.api.getLibrary().then(setLibrary).catch(() => undefined)
     const offMax = window.api.onWindowMaximized(setMaximized)
     return offMax
   }, [refreshStatus])
@@ -156,6 +158,7 @@ export default function App(): React.JSX.Element {
     })
     const offFfmpegProgress = window.api.onFfmpegProgress(setFfmpegProgress)
     const offUpdate = window.api.onUpdateEvent(setUpdate)
+    const offLibrary = window.api.onLibraryUpdated(setLibrary)
     const offClip = window.api.onClipboardUrl((url) => {
       setClips((prev) => {
         if (prev.some((c) => c.url === url)) return prev
@@ -194,6 +197,7 @@ export default function App(): React.JSX.Element {
       offFfmpegStatus()
       offFfmpegProgress()
       offUpdate()
+      offLibrary()
       offClip()
     }
   }, [])
@@ -370,6 +374,8 @@ export default function App(): React.JSX.Element {
         formatId,
         title: meta?.title || item.url,
         thumbnail: meta?.thumbnail ?? null,
+        site: meta?.extractor ?? null,
+        duration: meta?.duration ?? null,
         playlist: meta ? meta.playlist : true,
         playlistItems
       })
@@ -401,7 +407,7 @@ export default function App(): React.JSX.Element {
         try {
           for (const u of extractUrls(await f.text())) urls.add(u)
         } catch {
-          // unreadable file — ignore
+          // unreadable file â€” ignore
         }
       }
     }
@@ -410,7 +416,7 @@ export default function App(): React.JSX.Element {
     if (urls.size > 0) {
       await window.api.addUrls([...urls])
       await window.api.listDownloads().then(setJobs).catch(() => undefined)
-      setScreen('downloads')
+      setScreen('library')
     }
   }, [])
 
@@ -453,13 +459,13 @@ export default function App(): React.JSX.Element {
         return (
           <HomeScreen
             status={status}
-            onGoDownloads={() => setScreen('downloads')}
+            onGoDownloads={() => setScreen('library')}
             hotUrl={hotUrl}
             onHotUrlHandled={() => setHotUrl(null)}
           />
         )
-      case 'downloads':
-        return <DownloadsScreen jobs={jobs} onMove={moveJob} schedule={status?.schedule ?? null} />
+      case 'library':
+        return <LibraryScreen jobs={jobs} library={library} onMove={moveJob} schedule={status?.schedule ?? null} />
       case 'follows':
         return <FollowsScreen />
       case 'settings':
@@ -481,7 +487,7 @@ export default function App(): React.JSX.Element {
           />
         )
     }
-  }, [screen, jobs, status, theme, installing, installProgress, ffmpegBusy, ffmpegProgress, ffmpegError])
+  }, [screen, jobs, library, status, theme, installing, installProgress, ffmpegBusy, ffmpegProgress, ffmpegError])
 
   return (
     <I18nProvider value={appSettings?.language ?? 'en'}>
@@ -589,7 +595,7 @@ export default function App(): React.JSX.Element {
           <main className="flex-1">{screenEl}</main>
           <footer className="mt-6 flex items-center justify-between border-t border-sc64-border pt-4">
             <div className="truncate text-[11px] text-sc64-muted">
-              {t('app.downloadsTo', { path: status?.downloadsDir ?? '…' })}
+              {t('app.downloadsTo', { path: status?.downloadsDir ?? 'â€¦' })}
             </div>
             <div className="flex items-center gap-2">
               {isGalleryTheme(theme) ? (

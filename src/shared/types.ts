@@ -127,6 +127,8 @@ export interface VideoMetadata {
   id: string
   title: string
   uploader: string | null
+  /** Extractor/site name reported by yt-dlp, e.g. "YouTube". */
+  extractor: string | null
   duration: number | null
   thumbnail: string | null
   webpageUrl: string
@@ -149,6 +151,10 @@ export interface DownloadJob {
   url: string
   title: string
   thumbnail: string | null
+  /** Site/extractor name when known, e.g. "YouTube". */
+  site?: string | null
+  /** Media duration in seconds when known. */
+  duration?: number | null
   /** Friendly format label the user picked. */
   formatLabel: string
   /** The chosen quality preset id (QUALITY_PRESETS), for re-downloads. */
@@ -171,6 +177,44 @@ export interface DownloadJob {
   error: string | null
   createdAt: string
   completedAt: string | null
+}
+
+/**
+ * One entry in the persistent media library (0.9.0). Built from a completed
+ * download job and shared by the desktop UI and the future web interface.
+ */
+export interface LibraryItem {
+  id: string
+  /** Originating download job id. */
+  jobId: string
+  url: string
+  title: string
+  thumbnail: string | null
+  site: string | null
+  /** Media duration in seconds when known. */
+  duration: number | null
+  sizeBytes: number | null
+  formatLabel: string
+  /** Lower-case container extension, e.g. "mp4". */
+  ext: string | null
+  /** Absolute path of the media file, when it was resolved. */
+  filePath: string | null
+  presetId: string
+  formatId?: string
+  playlist: boolean
+  playlistItems?: string
+  /** ISO timestamp of when the download was queued. */
+  addedAt: string
+  completedAt: string | null
+}
+
+/** Library data + derived storage stats sent to the UI. */
+export interface LibrarySnapshot {
+  items: LibraryItem[]
+  count: number
+  totalBytes: number
+  /** Ids of entries whose file no longer exists on disk. */
+  missingIds: string[]
 }
 
 /** Output container for remuxing (--remux-video); 'original' keeps the source. */

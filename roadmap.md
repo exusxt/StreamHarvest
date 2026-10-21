@@ -57,12 +57,12 @@ Ships incrementally: 0.7.0 → 0.8.0 → 0.9.0 → 0.10.0 → 0.11.0 → 1.0.0.
 - Auto-queue newly published videos (per-subscription opt-out, saved quality preset)
 - "New videos" desktop notifications when not auto-downloading
 
-### 0.8.0 — Download scheduling
+### 0.8.0 — Download scheduling (shipped)
 - Time-window scheduling (only download between set hours, queue outside them)
 - Bandwidth schedule (per-time-of-day speed limit) — completes Phase 4's promise
 - Schedule indicator in the queue UI
 
-### 0.9.0 — Library overhaul
+### 0.9.0 — Library overhaul (shipped)
 Replace the History/Downloads split with a single, media-centric **Library**; this also becomes the data layer the web UI (0.10.0) reuses.
 
 - Merge the current Download history + job list into one Library view

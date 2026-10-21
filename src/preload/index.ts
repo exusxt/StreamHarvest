@@ -3,7 +3,7 @@
 // method is a thin ipcRenderer.invoke/send wrapper over the main-process IPC.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, Follow, FollowResult, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, Follow, FollowResult, LibrarySnapshot, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
 
 const api = {
   // App / engine status.
@@ -12,7 +12,7 @@ const api = {
 
   // Metadata + downloads.
   fetchMetadata: (url: string): Promise<VideoMetadata> => ipcRenderer.invoke('dl:fetchMetadata', url),
-  startDownload: (params: { url: string; presetId: string; formatId?: string; title?: string; thumbnail?: string | null; playlist?: boolean; playlistItems?: string }): Promise<{ ok: boolean; job?: DownloadJob; error?: string }> =>
+  startDownload: (params: { url: string; presetId: string; formatId?: string; title?: string; thumbnail?: string | null; site?: string | null; duration?: number | null; playlist?: boolean; playlistItems?: string }): Promise<{ ok: boolean; job?: DownloadJob; error?: string }> =>
     ipcRenderer.invoke('dl:start', params),
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:pause', id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke('dl:resume', id),
@@ -24,6 +24,20 @@ const api = {
   clearHistory: (): Promise<void> => ipcRenderer.invoke('dl:clearHistory'),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('app:reveal', path),
   openDownloadsFolder: (): Promise<void> => ipcRenderer.invoke('app:openDownloadsFolder'),
+  copyText: (text: string): Promise<void> => ipcRenderer.invoke('app:copyText', text),
+
+  // Media library (0.9.0).
+  getLibrary: (): Promise<LibrarySnapshot> => ipcRenderer.invoke('library:get'),
+  removeLibraryItems: (ids: string[]): Promise<LibrarySnapshot> => ipcRenderer.invoke('library:remove', ids),
+  removeMissingLibraryItems: (): Promise<LibrarySnapshot> => ipcRenderer.invoke('library:removeMissing'),
+  deleteLibraryFile: (id: string): Promise<LibrarySnapshot> => ipcRenderer.invoke('library:deleteFile', id),
+  openLibraryItem: (id: string): Promise<void> => ipcRenderer.invoke('library:open', id),
+  revealLibraryItem: (id: string): Promise<void> => ipcRenderer.invoke('library:reveal', id),
+  onLibraryUpdated: (cb: (snapshot: LibrarySnapshot) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, snapshot: LibrarySnapshot): void => cb(snapshot)
+    ipcRenderer.on('library:updated', listener)
+    return () => ipcRenderer.removeListener('library:updated', listener)
+  },
 
   // Clipboard monitoring.
   consumeClipboardUrl: (url: string): Promise<void> => ipcRenderer.invoke('clipboard:consume', url),

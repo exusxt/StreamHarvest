@@ -119,6 +119,8 @@ export function HomeScreen({
         formatId,
         title: metadata.title,
         thumbnail: metadata.thumbnail,
+        site: metadata.extractor,
+        duration: metadata.duration,
         playlist: metadata.playlist,
         playlistItems
       })

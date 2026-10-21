@@ -19,3 +19,13 @@ export function extractUrls(text: string): string[] {
   }
   return out
 }
+
+/** Friendly site label from a URL's hostname ("www." removed), or null. */
+export function siteFromUrl(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./i, '')
+    return host || null
+  } catch {
+    return null
+  }
+}

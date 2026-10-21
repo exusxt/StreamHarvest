@@ -10,6 +10,7 @@ import { app, Notification } from 'electron'
 import type { AppSettings, DownloadJob, DownloadStatus, MediaFormat, OutputFormat, OutputLayout, PlaylistEntry, VideoMetadata } from '../shared/types'
 import { QUALITY_PRESETS } from '../shared/types'
 import { effectiveSpeedLimit, isWithinWindow } from '../shared/schedule'
+import { siteFromUrl } from '../shared/urls'
 import { translate } from '../shared/i18n'
 import { ffmpegManagedPath, ffmpegStoreDir } from './ffmpeg'
 import { ytDlpPath } from './ytdlp'
@@ -88,6 +89,8 @@ interface StartParams {
   formatId?: string
   title?: string
   thumbnail?: string | null
+  site?: string | null
+  duration?: number | null
   playlist?: boolean
   playlistItems?: string
 }
@@ -208,7 +211,7 @@ export class DownloadManager {
   async fetchMetadata(url: string): Promise<VideoMetadata> {
     const bin = ytDlpPath()
     if (!bin) {
-      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: 'yt-dlp is not installed yet.' }
+      return { id: '', title: '', uploader: null, extractor: siteFromUrl(url), duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: 'yt-dlp is not installed yet.' }
     }
     const args = ['-J', '--flat-playlist', '--no-warnings', url]
     try {
@@ -221,6 +224,7 @@ export class DownloadManager {
           id: str(data.id) || '',
           title: str(data.title) || str(first.title) || 'Playlist',
           uploader: str(data.uploader) || str(first.uploader) || null,
+          extractor: str(data.extractor_key) || str(data.extractor) || siteFromUrl(url),
           duration: null,
           thumbnail: str(data.thumbnail) || str(first.thumbnail) || null,
           webpageUrl: url,
@@ -235,6 +239,7 @@ export class DownloadManager {
         id: str(data.id) || '',
         title: str(data.title) || 'Unknown title',
         uploader: str(data.uploader) || null,
+        extractor: str(data.extractor_key) || str(data.extractor) || siteFromUrl(url),
         duration: num(data.duration),
         thumbnail: str(data.thumbnail) || null,
         webpageUrl: url,
@@ -246,7 +251,7 @@ export class DownloadManager {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      return { id: '', title: '', uploader: null, duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: msg }
+      return { id: '', title: '', uploader: null, extractor: siteFromUrl(url), duration: null, thumbnail: null, webpageUrl: url, formats: [], playlist: false, entryCount: null, entries: null, error: msg }
     }
   }
 
@@ -264,6 +269,8 @@ export class DownloadManager {
       url: params.url,
       title: params.title || params.url,
       thumbnail: params.thumbnail ?? null,
+      site: params.site ?? siteFromUrl(params.url),
+      duration: params.duration ?? null,
       formatLabel: presetLabel(params.presetId, params.formatId),
       presetId: params.presetId,
       formatId: params.formatId,
@@ -676,18 +683,20 @@ export class DownloadManager {
       const content = await readFile(historyFile(), 'utf-8')
       const list = JSON.parse(content) as DownloadJob[]
       for (const job of list) {
-        if (isTerminal(job.status) || job.status === 'paused') this.jobs.set(job.id, job)
+        if (!isTerminal(job.status)) this.jobs.set(job.id, job)
       }
     } catch {
-      // no history yet
+      // no resumable jobs yet
     }
   }
 
   private async persist(): Promise<void> {
-    const terminal = [...this.jobs.values()].filter((j) => isTerminal(j.status) || j.status === 'paused').slice(0, HISTORY_LIMIT)
+    // Completed entries live in the media library (library.json); the queue
+    // file only keeps jobs that can still be resumed after a restart.
+    const open = [...this.jobs.values()].filter((j) => !isTerminal(j.status)).slice(0, HISTORY_LIMIT)
     try {
       await mkdir(app.getPath('userData'), { recursive: true })
-      await writeFile(historyFile(), JSON.stringify(terminal, null, 2), 'utf-8')
+      await writeFile(historyFile(), JSON.stringify(open, null, 2), 'utf-8')
     } catch {
       // best-effort
     }
