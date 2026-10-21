@@ -12,6 +12,7 @@ import {
   CalendarClock,
   Check,
   Copy,
+  ExternalLink,
   Film,
   FolderOpen,
   HardDrive,
@@ -27,6 +28,7 @@ import {
   X
 } from 'lucide-react'
 import type { DownloadJob, LibraryItem, LibrarySnapshot, ScheduleState } from '../../../shared/types'
+import { mediaUrlFor } from '../../../shared/media'
 import { extractUrls } from '../../../shared/urls'
 import { useT, type TFunc } from '../i18n'
 import { Badge, Button, Input, Panel, ProgressBar, Select, Spinner } from '../components/ui'
@@ -124,10 +126,22 @@ export function LibraryScreen({
   )
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [playing, setPlaying] = useState<LibraryItem | null>(null)
+  const [playFailed, setPlayFailed] = useState(false)
 
   useEffect(() => {
     window.localStorage.setItem(VIEW_KEY, view)
   }, [view])
+
+  useEffect(() => {
+    if (!playing) return
+    setPlayFailed(false)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setPlaying(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [playing])
 
   const items = library?.items ?? []
   const missing = useMemo(() => new Set(library?.missingIds ?? []), [library?.missingIds])
@@ -195,6 +209,13 @@ export function LibraryScreen({
     setTimeout(() => setCopiedId((id) => (id === item.id ? null : id)), 1500)
   }
 
+  const openPlayer = (item: LibraryItem): void => {
+    if (missing.has(item.id)) return
+    setPlaying(item)
+  }
+
+  const closePlayer = (): void => setPlaying(null)
+
   const addFromText = async (): Promise<void> => {
     const urls = extractUrls(bulkText)
     if (urls.length === 0) return
@@ -235,8 +256,11 @@ export function LibraryScreen({
     }
     return (
       <div className="flex flex-wrap items-center gap-1">
-        <Button variant="outline" size="sm" disabled={gone} onClick={() => void window.api.openLibraryItem(item.id)} title={t('library.play')}>
+        <Button variant="outline" size="sm" disabled={gone} onClick={() => openPlayer(item)} title={t('library.play')}>
           <Play className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="outline" size="sm" disabled={gone} onClick={() => void window.api.openLibraryItem(item.id)} title={t('library.player.openExternal')}>
+          <ExternalLink className="h-3.5 w-3.5" />
         </Button>
         <Button variant="outline" size="sm" disabled={gone} onClick={() => void window.api.revealLibraryItem(item.id)} title={t('library.reveal')}>
           <FolderOpen className="h-3.5 w-3.5" />
@@ -278,8 +302,15 @@ export function LibraryScreen({
               <Film className="h-8 w-8 text-sc64-muted" />
             </div>
           )}
+          {!gone ? (
+            <button type="button" onClick={() => openPlayer(item)} className="group absolute inset-0 flex items-center justify-center" title={t('library.play')}>
+              <span className="rounded-full bg-black/60 p-2.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <Play className="h-5 w-5" />
+              </span>
+            </button>
+          ) : null}
           {item.duration ? (
-            <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
+            <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
               {formatDuration(item.duration)}
             </span>
           ) : null}
@@ -305,14 +336,15 @@ export function LibraryScreen({
     const gone = missing.has(item.id)
     return (
       <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-sc64-border bg-sc64-panel p-2.5">
-        <div className="relative">
+        <button type="button" onClick={() => openPlayer(item)} disabled={gone} className="group relative shrink-0 rounded-md" title={t('library.play')}>
           {thumb(item, 'h-14 w-24 rounded-md')}
+          {!gone ? <span className="absolute inset-0 flex items-center justify-center rounded-md bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100"><Play className="h-4 w-4" /></span> : null}
           {gone ? (
             <span className="absolute -right-1 -top-1 rounded-full bg-sc64-warn p-0.5 text-sc64-bg">
               <AlertTriangle className="h-3 w-3" />
             </span>
           ) : null}
-        </div>
+        </button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-sc64-text" title={item.title}>{item.title}</p>
           <p className="truncate text-[11px] text-sc64-muted">{itemMeta(item)}</p>
@@ -558,6 +590,54 @@ export function LibraryScreen({
       {restarting ? (
         <div className="flex items-center gap-2 text-xs text-sc64-muted">
           <Spinner className="h-3.5 w-3.5" /> {t('library.restarting')}
+        </div>
+      ) : null}
+
+      {playing ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm"
+          onClick={closePlayer}
+          role="dialog"
+          aria-modal="true"
+          aria-label={playing.title}
+        >
+          <div
+            className="flex w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-sc64-border bg-sc64-panel shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center gap-2 border-b border-sc64-border px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-sc64-text" title={playing.title}>{playing.title}</p>
+                <p className="truncate text-[11px] text-sc64-muted">{itemMeta(playing)}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void window.api.openLibraryItem(playing.id)}>
+                <ExternalLink className="h-3.5 w-3.5" /> {t('library.player.openExternal')}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void window.api.revealLibraryItem(playing.id)}>
+                <FolderOpen className="h-3.5 w-3.5" /> {t('library.reveal')}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={closePlayer} title={t('library.player.close')}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="bg-black">
+              <video
+                key={playing.id}
+                src={mediaUrlFor(playing.id)}
+                poster={playing.thumbnail ?? undefined}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[78vh] w-full bg-black"
+                onError={() => setPlayFailed(true)}
+              />
+            </div>
+            {playFailed ? (
+              <div className="border-t border-sc64-border px-4 py-3 text-center text-xs text-sc64-muted">
+                {t('library.player.error')}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

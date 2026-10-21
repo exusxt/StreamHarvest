@@ -10,6 +10,7 @@ import { extractUrls } from '../shared/urls'
 import { translate } from '../shared/i18n'
 import { DownloadManager } from './downloads'
 import { LibraryService } from './library'
+import { registerMediaProtocol, registerMediaScheme } from './media'
 import { ackFollow, addFollow, checkAllFollows, checkFollow, listFollows, removeFollow, setOnNewVideos, updateFollow } from './follows'
 import { ClipboardMonitor } from './clipboard'
 import { TrayController } from './tray'
@@ -27,6 +28,9 @@ let clipboardMonitor: ClipboardMonitor | null = null
 let trayController: TrayController | null = null
 let hotkeyController: HotkeyController | null = null
 let quitting = false
+
+// The embedded player streams library files through this scheme.
+registerMediaScheme()
 
 // --- yt-dlp background auto-update ------------------------------------------
 // yt-dlp breaks whenever a site changes its extraction logic and upstream
@@ -577,6 +581,7 @@ app.whenReady().then(async () => {
   pendingProtocolUrl = parseProtocolFromArgv(process.argv)
   library = new LibraryService(getSettings)
   await library.init()
+  registerMediaProtocol(() => library)
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
     if (job.status === 'completed') {
