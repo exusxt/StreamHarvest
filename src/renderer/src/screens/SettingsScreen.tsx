@@ -3,8 +3,8 @@
  * engine section (yt-dlp and ffmpeg install / update / check / remove).
  */
 import { useEffect, useState } from 'react'
-import { Captions, CalendarClock, CheckCircle2, Clapperboard, Film, Folder, FolderOpen, Gauge, Globe, Palette, RefreshCw, Settings2, SlidersHorizontal, Trash2, Wrench, Zap } from 'lucide-react'
-import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, Language, OutputFormat, OutputLayout, YtDlpCheckResult } from '../../../shared/types'
+import { Captions, CalendarClock, CheckCircle2, Clapperboard, Copy, ExternalLink, Film, Folder, FolderOpen, Gauge, Globe, Palette, QrCode, RefreshCw, Settings2, SlidersHorizontal, Trash2, Wifi, Wrench, Zap } from 'lucide-react'
+import type { AppSettings, AppStatus, BinaryProgress, FfmpegCheckResult, Language, OutputFormat, OutputLayout, WebStatus, YtDlpCheckResult } from '../../../shared/types'
 import { QUALITY_PRESETS } from '../../../shared/types'
 import { hotkeyLabel } from '../../../shared/hotkey'
 import { useT } from '../i18n'
@@ -84,11 +84,39 @@ export function SettingsScreen({
   const [ffmpegCheck, setFfmpegCheck] = useState<FfmpegCheckResult | null>(null)
   const [checkingFfmpeg, setCheckingFfmpeg] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [web, setWeb] = useState<WebStatus | null>(null)
+  const [copied, setCopied] = useState<'url' | 'token' | null>(null)
 
   useEffect(() => {
     window.api.getSettings().then(setSettings).catch(() => undefined)
+    window.api.getWebStatus().then(setWeb).catch(() => undefined)
   }, [])
 
+  const patchWeb = (patch: { enabled?: boolean; port?: number; bind?: 'localhost' | 'lan' }): void => {
+    window.api.applyWebSettings(patch).then((status) => {
+      setWeb(status)
+      window.api.getSettings().then(setSettings).catch(() => undefined)
+    })
+  }
+
+  const regenerateToken = (): void => {
+    window.api.regenerateWebToken().then((status) => {
+      setWeb(status)
+      window.api.getSettings().then(setSettings).catch(() => undefined)
+    })
+  }
+
+  const copyText = (kind: 'url' | 'token', text: string): void => {
+    void window.api.copyText(text)
+    setCopied(kind)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  const sessionLabel = (mins: number): string => {
+    if (mins <= 0) return t('settings.webSessionNever')
+    if (mins % 1440 === 0) return t('settings.webSessionDays', { count: mins / 1440 })
+    return t('settings.webSessionHours', { count: Math.round(mins / 60) })
+  }
   const update = (patch: Partial<AppSettings>): void => {
     setSaved(false)
     window.api.setSettings(patch).then((next) => {
@@ -605,6 +633,86 @@ export function SettingsScreen({
             ) : null}
           </div>
         </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sc64-muted">
+          <Wifi className="h-3.5 w-3.5" /> {t('settings.web')}
+        </div>
+        <Checkbox
+          label={t('settings.webEnable')}
+          hint={t('settings.webEnableHint')}
+          checked={settings?.webEnabled ?? false}
+          onChange={(v) => patchWeb({ enabled: v })}
+        />
+
+        {settings?.webEnabled ? (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('settings.webPort')} hint={t('settings.webPortHint')}>
+                <Input
+                  type="number"
+                  min={1024}
+                  max={65535}
+                  value={settings?.webPort ?? 8787}
+                  onChange={(e) => update({ webPort: parseInt(e.target.value, 10) || 8787 })}
+                />
+              </Field>
+              <Field label={t('settings.webBind')} hint={t('settings.webBindHint')}>
+                <Select
+                  value={settings?.webBind ?? 'localhost'}
+                  onChange={(e) => patchWeb({ bind: e.target.value as 'localhost' | 'lan' })}
+                >
+                  <option value="localhost">{t('settings.webBindLocalhost')}</option>
+                  <option value="lan">{t('settings.webBindLan')}</option>
+                </Select>
+              </Field>
+            </div>
+
+            <Field label={t('settings.webToken')} hint={t('settings.webTokenHint')}>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input readOnly value={web?.token ?? settings?.webToken ?? ''} className="flex-1 font-mono text-xs" />
+                <Button variant="outline" size="sm" onClick={() => copyText('token', web?.token ?? settings?.webToken ?? '')}>
+                  <Copy className="h-3.5 w-3.5" /> {copied === 'token' ? t('settings.saved') : t('settings.webCopyToken')}
+                </Button>
+                <Button variant="outline" size="sm" onClick={regenerateToken}>
+                  <RefreshCw className="h-3.5 w-3.5" /> {t('settings.webRegenerate')}
+                </Button>
+              </div>
+            </Field>
+
+            <Field label={t('settings.webSession')} hint={t('settings.webSessionHint')}>
+              <Select
+                value={String(settings?.webSessionMinutes ?? 720)}
+                onChange={(e) => update({ webSessionMinutes: parseInt(e.target.value, 10) })}
+              >
+                <option value="0">{t('settings.webSessionNever')}</option>
+                <option value="60">{sessionLabel(60)}</option>
+                <option value="720">{sessionLabel(720)}</option>
+                <option value="1440">{sessionLabel(1440)}</option>
+                <option value="10080">{sessionLabel(10080)}</option>
+              </Select>
+            </Field>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sc64-border bg-sc64-panel2/40 p-3">
+              <Badge tone={web?.running ? 'good' : 'warn'}>
+                {web?.running ? t('settings.webRunning', { url: web.urls[0] ?? `http://localhost:${settings?.webPort}` }) : t('settings.webStopped')}
+              </Badge>
+              <span className="ml-auto flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!web?.running} onClick={() => copyText('url', web?.urls[0] ?? '')}>
+                  <Copy className="h-3.5 w-3.5" /> {copied === 'url' ? t('settings.saved') : t('settings.webCopyUrl')}
+                </Button>
+                <Button variant="primary" size="sm" disabled={!web?.running} onClick={() => void window.api.openWebUi()}>
+                  <ExternalLink className="h-3.5 w-3.5" /> {t('settings.webOpen')}
+                </Button>
+              </span>
+            </div>
+            {web?.error ? <p className="text-xs text-sc64-bad">{t('settings.webError', { error: web.error })}</p> : null}
+            <p className="flex items-center gap-1.5 text-[11px] text-sc64-muted">
+              <QrCode className="h-3 w-3" /> {t('settings.webPublic')}
+            </p>
+          </div>
+        ) : null}
       </Panel>
 
       <Panel>

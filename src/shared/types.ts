@@ -288,6 +288,32 @@ export interface AppSettings {
   extraArgs: string
   /** Whether the first-run onboarding was completed or dismissed. */
   onboarded: boolean
+  /** Serve the opt-in local web UI (off by default). */
+  webEnabled: boolean
+  /** TCP port the web server listens on. */
+  webPort: number
+  /** Bind address: 'localhost' (loopback only) or 'lan' (all interfaces). */
+  webBind: WebBind
+  /** Shared access token required by the web UI/API. */
+  webToken: string
+  /** Invalidate web sessions after this many minutes (0 = never). */
+  webSessionMinutes: number
+}
+
+/** Where the opt-in web server binds. */
+export type WebBind = 'localhost' | 'lan'
+
+/** Runtime status of the opt-in web server, sent to the desktop UI. */
+export interface WebStatus {
+  enabled: boolean
+  running: boolean
+  port: number
+  bind: WebBind
+  token: string
+  /** URLs the UI can be reached at (loopback first, LAN when enabled). */
+  urls: string[]
+  /** Last error message when the server failed to start. */
+  error: string | null
 }
 
 /** Result of an install/update operation on the yt-dlp binary. */

@@ -3,7 +3,7 @@
 // method is a thin ipcRenderer.invoke/send wrapper over the main-process IPC.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, Follow, FollowResult, LibrarySnapshot, UpdateState, VideoMetadata, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
+import type { AppSettings, AppStatus, BinaryProgress, DownloadJob, FfmpegCheckResult, FfmpegOpResult, FfmpegStatus, Follow, FollowResult, LibrarySnapshot, UpdateState, VideoMetadata, WebStatus, YtDlpCheckResult, YtDlpOpResult, YtDlpStatus } from '../shared/types'
 
 const api = {
   // App / engine status.
@@ -46,6 +46,13 @@ const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
   setSettings: (settings: Partial<AppSettings>): Promise<AppSettings> => ipcRenderer.invoke('settings:set', settings),
   chooseDownloadsDir: (): Promise<string | null> => ipcRenderer.invoke('settings:chooseDownloadsDir'),
+
+  // Opt-in web interface (0.10.0).
+  getWebStatus: (): Promise<WebStatus> => ipcRenderer.invoke('web:getStatus'),
+  applyWebSettings: (patch: { enabled?: boolean; port?: number; bind?: 'localhost' | 'lan' }): Promise<WebStatus> =>
+    ipcRenderer.invoke('web:apply', patch),
+  regenerateWebToken: (): Promise<WebStatus> => ipcRenderer.invoke('web:regenerateToken'),
+  openWebUi: (): Promise<void> => ipcRenderer.invoke('web:openBrowser'),
 
   // Followed channels/playlists.
   listFollows: (): Promise<Follow[]> => ipcRenderer.invoke('follows:list'),

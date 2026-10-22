@@ -5,11 +5,12 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, Notificati
 import { dirname, join, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import type { AppStatus, FfmpegCheckResult, Follow, LibrarySnapshot, YtDlpCheckResult } from '../shared/types'
+import type { AppStatus, FfmpegCheckResult, Follow, LibrarySnapshot, WebStatus, YtDlpCheckResult } from '../shared/types'
 import { extractUrls } from '../shared/urls'
 import { translate } from '../shared/i18n'
 import { DownloadManager } from './downloads'
 import { LibraryService } from './library'
+import { WebServer } from './web'
 import { registerMediaProtocol, registerMediaScheme } from './media'
 import { ackFollow, addFollow, checkAllFollows, checkFollow, listFollows, removeFollow, setOnNewVideos, updateFollow } from './follows'
 import { ClipboardMonitor } from './clipboard'
@@ -24,6 +25,7 @@ import { checkForUpdates, initUpdater, installUpdate } from './updater'
 let mainWindow: BrowserWindow | null = null
 let manager: DownloadManager | null = null
 let library: LibraryService | null = null
+let webServer: WebServer | null = null
 let clipboardMonitor: ClipboardMonitor | null = null
 let trayController: TrayController | null = null
 let hotkeyController: HotkeyController | null = null
@@ -146,6 +148,7 @@ function librarySnapshot(): LibrarySnapshot {
 
 function broadcastLibrary(): void {
   mainWindow?.webContents.send('library:updated', librarySnapshot())
+  webServer?.broadcast()
 }
 
 function registerIpc(): void {
@@ -304,6 +307,56 @@ function registerIpc(): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
+  })
+
+  // Opt-in web interface (0.10.0). The server reconciles itself with settings
+  // after every change; the desktop UI polls/reads status through these.
+  ipcMain.handle('web:getStatus', (): WebStatus => webServer?.status() ?? {
+    enabled: getSettings().webEnabled,
+    running: false,
+    port: getSettings().webPort,
+    bind: getSettings().webBind,
+    token: getSettings().webToken,
+    urls: [],
+    error: null
+  })
+  ipcMain.handle('web:apply', async (_e, patch: { enabled?: boolean; port?: number; bind?: 'localhost' | 'lan' }): Promise<WebStatus> => {
+    const next = await setSettings({
+      ...(patch?.enabled !== undefined ? { webEnabled: patch.enabled } : {}),
+      ...(patch?.port !== undefined ? { webPort: patch.port } : {}),
+      ...(patch?.bind !== undefined ? { webBind: patch.bind } : {})
+    })
+    webServer?.apply()
+    trayController?.sync()
+    hotkeyController?.sync()
+    manager?.wake()
+    return webServer?.status() ?? {
+      enabled: next.webEnabled,
+      running: false,
+      port: next.webPort,
+      bind: next.webBind,
+      token: next.webToken,
+      urls: [],
+      error: null
+    }
+  })
+  ipcMain.handle('web:regenerateToken', async (): Promise<WebStatus> => {
+    const token = webServer?.rotateToken() ?? getSettings().webToken
+    await setSettings({ webToken: token })
+    return webServer?.status() ?? {
+      enabled: getSettings().webEnabled,
+      running: false,
+      port: getSettings().webPort,
+      bind: getSettings().webBind,
+      token,
+      urls: [],
+      error: null
+    }
+  })
+  ipcMain.handle('web:openBrowser', () => {
+    const status = webServer?.status()
+    const url = status?.urls[0]
+    if (url) void shell.openExternal(url)
   })
 
   // yt-dlp binary management. Install/update stream progress + status to the
@@ -584,11 +637,14 @@ app.whenReady().then(async () => {
   registerMediaProtocol(() => library)
   manager = new DownloadManager(getSettings, (job) => {
     mainWindow?.webContents.send('dl:job', job)
+    webServer?.broadcast()
     if (job.status === 'completed') {
       void library?.addFromJob(job).then(() => broadcastLibrary())
     }
   })
   manager.wake()
+  webServer = new WebServer(getSettings, () => manager, () => library)
+  webServer.apply()
   clipboardMonitor = new ClipboardMonitor(getSettings, (url) => {
     mainWindow?.webContents.send('clipboard:url', url)
   })
@@ -653,6 +709,7 @@ app.on('before-quit', () => {
   quitting = true
   hotkeyController?.unregister()
   trayController?.destroy()
+  void webServer?.dispose()
 })
 
 app.on('window-all-closed', () => {

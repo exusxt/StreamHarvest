@@ -6,8 +6,14 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AppSettings } from '../shared/types'
 import { parseTimeOfDay } from '../shared/schedule'
+import { randomBytes } from 'node:crypto'
 
 const defaultDownloadsDir = join(homedir(), 'Downloads', 'StreamHarvest')
+
+/** Random URL-safe access token for the opt-in web UI. */
+function newWebToken(): string {
+  return randomBytes(24).toString('base64url')
+}
 
 const DEFAULTS: AppSettings = {
   downloadsDir: defaultDownloadsDir,
@@ -39,7 +45,12 @@ const DEFAULTS: AppSettings = {
   proxy: '',
   advancedMode: false,
   extraArgs: '',
-  onboarded: false
+  onboarded: false,
+  webEnabled: false,
+  webPort: 8787,
+  webBind: 'localhost',
+  webToken: newWebToken(),
+  webSessionMinutes: 720
 }
 
 let settings: AppSettings = { ...DEFAULTS }
@@ -71,6 +82,17 @@ function normalizeSchedule(s: AppSettings): void {
   if (typeof s.speedWindowLimit !== 'string') s.speedWindowLimit = DEFAULTS.speedWindowLimit
 }
 
+/** Keeps the web-interface fields valid after a load or a settings patch. */
+function normalizeWeb(s: AppSettings): void {
+  s.webEnabled = s.webEnabled === true
+  const port = Math.floor(Number(s.webPort))
+  s.webPort = Number.isFinite(port) && port >= 1 && port <= 65535 ? port : DEFAULTS.webPort
+  s.webBind = s.webBind === 'lan' ? 'lan' : 'localhost'
+  if (typeof s.webToken !== 'string' || s.webToken.length < 16) s.webToken = DEFAULTS.webToken
+  const mins = Math.floor(Number(s.webSessionMinutes))
+  s.webSessionMinutes = Number.isFinite(mins) && mins >= 0 ? Math.min(525600, mins) : DEFAULTS.webSessionMinutes
+}
+
 /** Loads persisted settings (if any), merging over the defaults. */
 export async function loadSettings(): Promise<void> {
   try {
@@ -98,6 +120,7 @@ export async function loadSettings(): Promise<void> {
     if (typeof settings.extraArgs !== 'string') settings.extraArgs = DEFAULTS.extraArgs
     settings.onboarded = settings.onboarded === true
     normalizeSchedule(settings)
+    normalizeWeb(settings)
   } catch {
     // no settings yet — keep defaults
   }
@@ -117,6 +140,7 @@ export async function setSettings(patch: Partial<AppSettings>): Promise<AppSetti
     settings.filenameTemplate = DEFAULTS.filenameTemplate
   }
   normalizeSchedule(settings)
+  normalizeWeb(settings)
   try {
     await mkdir(app.getPath('userData'), { recursive: true })
     await writeFile(settingsFile(), JSON.stringify(settings, null, 2), 'utf-8')
